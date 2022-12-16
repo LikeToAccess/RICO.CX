@@ -6,6 +6,8 @@ __pycache__/
 # C extensions
 *.so
 
+selenium_data/
+
 # Distribution / packaging
 .Python
 build/
