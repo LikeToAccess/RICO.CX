@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>{% block title %}{% endblock %}</title>
+	<link rel="stylesheet" type="text/css" href="/static/css/style.css">
+	<link rel="stylesheet" type="text/css" href="/static/css/animation.css">
+	<link rel="stylesheet" type="text/css" href="/static/css/font-awesome-6.2.1.min.css">
+	<link rel="stylesheet" type="text/css" href="/static/css/material-symbols-rounded.css">
+	<!-- <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"> -->
+	<!-- <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"> -->
+	<link rel="stylesheet" type="text/css" href="/static/css/material-icons.css">
+	<script src="/static/js/script.js" defer></script>
+	<script src="/static/js/video-player.js" type="text/javascript" defer></script>
+	<script src="/static/js/settings.js" type="text/javascript"></script>
+	<!-- <script src="https://accounts.google.com/gsi/client" async defer></script> -->
+	<link rel="shortcut icon" type="image/png" href="/static/ico/favicon.png"/>
+</head>
+<body>
+<header>
+	<h1 class="title">{% block title_h1 %}{% endblock %}</h1>
+	<!-- <div
+		id="g_id_onload"
+		data-client_id="788220717359-mqsrau2lmb85l94f68febkpb8fnbgj82.apps.googleusercontent.com"
+		data-auto_select="true"
+		data-callback="handleCredentialResponse">
+	</div> -->
+</header>
+
+<main>
+	<!-- <video id="video" src="MEDIA/108802760954752258469.mp4" controls preload="auto">
+		<source type="video/mp4">
+		Unsupported browser.
+	</video> -->
+	<div class="search-container">
+		<form id="input-section" autocomplete="off">
+			<input type="text" id="search-term-id">
+			<input type="submit" value="Submit" id="submit-button-id">
+			<!-- <button type="submit" value="Popular" id="pop-button-id"> -->
+		</form>
+	</div>
+	<div style="margin: 85px;"></div>
+
+	<div class="video-player">
+	<div class="container">
+		<div class="wrapper">
+			<div class="video-timeline">
+				<div class="progress-area">
+					<span>0:00</span>
+					<div class="progress-bar"></div>
+				</div>
+			</div>
+			<ul class="video-controls">
+				<li class="options left">
+					<button class="volume"><i class="fas fa-volume-high"></i></button>
+					<input type="range" id="range-input">
+					<div class="video-timer">
+						<p class="current-time">0:00</p>
+						<p class="separator"> / </p>
+						<p class="video-duration">0:00</p>
+					</div>
+				</li>
+				<li class="options center">
+					<button class="skip-backward"><i class="fas fa-backward"></i></button>
+					<button class="play-pause"><i class="fas fa-play"></i></button>
+					<button class="skip-forward"><i class="fas fa-forward"></i></button>
+				</li>
+				<li class="options right">
+					<div class="settings-content">
+						<button class="playback-settings"><i class="fas fa-gear"></i></button>
+						<ul class="settings-options">
+							<li>2160p</li>
+							<li>1440p</li>
+							<li class="active">1080p</li>
+							<li>720p</li>
+							<li>480p</li>
+							<li>360p</li>
+						</ul>	
+					</div>
+					<button class="picture-in-picture">
+						<span class="material-symbols-rounded">picture_in_picture_alt</span>
+					</button>
+					<button class="fullscreen"><i class="fas fa-expand"></i></button>
+				</li>
+			</ul>
+		</div>
+		{% if current_user.is_authenticated %}
+			<video id="video-id" preload="metadata" src="{{ video_url }}"></video>
+		{% else %}
+			<video id="video-id" preload="metadata" autoplay muted loop src="/static/video/loading.mp4"></video>
+		{% endif %}
+	</div>
+	</div>
+
+	{% if not current_user.is_authenticated %}
+		<div class="overlay" id="login-modal">
+			<div id="login-container">
+				<p>Login</p>
+				<div class="login-form">
+					<a class="button" href="/login">Google Login</a>
+				</div>
+				<!-- <div class="g_id_signin"
+					 data-type="standard"
+					 data-shape="rectangular"
+					 data-theme="filled_black"
+					 data-text="signin_with"
+					 data-size="large"
+					 data-logo_alignment="left">
+				</div> -->
+			</div>
+		</div>
+	{% endif %}
+
+	{% if current_user.is_authenticated %}
+		<p>Hello, {{ current_user.first_name }}! You're logged in! Email: {{ current_user.email }}</p>
+		<div>
+			<p>Google Profile Picture:</p>
+			<img src="{{ current_user.profile_pic }}" alt="Google profile picture"></img>
+		</div>
+		<a class="button" href="/logout">Logout</a>
+		{% if group %}
+			<p>You are a member of, <i>{{ group.role }}</i> (with GID: {{ group.group_id }})</p>
+		{% endif %}
+	{% endif %}
+	<!-- {% block content %}{% endblock %} -->
+</main>
+
+<footer>
+	<p>&copy; 2022 - LikeToAccess</p>
+</footer>
+</body>
+</html>

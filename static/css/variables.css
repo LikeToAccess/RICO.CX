@@ -1,0 +1,33 @@
+@media (prefers-color-scheme: light) {
+	:root {
+		--result-card-background-color: #0000001A;
+		--title-text-color: #333;
+		--body-color: #444444;
+		--body-text-color: #FFF;
+		--body-background-color: #E3F2FD ;
+		--body-background-image: url(/static/img/background-1-light-landscape-bottom-gradient.png);
+		--body-background-image-narrow: url(/static/img/background-1-light-portrait.png);
+		--video-player-primary-color: #FFF;
+		--video-player-secondary-color: #2289FF;
+		--video-player-background-color: #EFEFEF;
+	}
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--result-card-background-color: #202020DC;
+		--title-text-color: #FFF;
+		--body-color: #EEE;
+		--body-text-color: #EEE;
+		--body-background-color: #131313;
+		--body-background-image: url(/static/img/background-2-dark-landscape-bottom-gradient.png);
+		--body-background-image-narrow: url(/static/img/background-2-dark-portrait-bottom-gradient.png);
+		--video-player-primary-color: #A5A5A5;
+		--video-player-secondary-color: #3F3F3F;
+		--video-player-background-color: #292929;
+	}
+}
+
+:root {
+	--video-player-bottom-gradient-color: #000;
+}

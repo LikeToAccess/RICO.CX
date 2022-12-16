@@ -8,6 +8,7 @@ __pycache__/
 
 selenium_data/
 captcha.png
+database.db
 
 # Distribution / packaging
 .Python

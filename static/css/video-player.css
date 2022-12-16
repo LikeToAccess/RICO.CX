@@ -1,0 +1,176 @@
+/**
+ * ----------------------------------------
+ * video player
+ * ----------------------------------------
+ */
+.video-player, .video-controls, .video-timer, .options {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.container {
+	max-width: 900px;
+	width: 98%;
+	position: relative;
+	background: var(--video-player-bottom-gradient-color);
+	border-radius: 5px;
+	overflow: hidden;
+}
+
+.wrapper {
+	position: absolute;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 1;
+}
+
+.wrapper::before {
+	content: "";
+	bottom: 0;
+	width: 100%;
+	z-index: -1;
+	position: absolute;
+	background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+	height: calc(100% + 35px);
+}
+
+.video-timeline {
+	height: 7px;
+	width: 100%;
+	cursor: pointer;
+}
+
+.video-timeline .progress-area {
+	height: 3px;
+/*	background: rgba(255, 255, 255, 0.6);*/
+	background: #FFFFFF99;
+}
+
+.progress-area span {
+	position: absolute;
+	left: 50%;
+	top: -25px;
+	font-size: 13px;
+	color: var(--video-player-primary-color);
+	transform: translateX(-50%);
+}
+
+.progress-area .progress-bar {
+	width: 0%;
+	height: 100%;
+	position: relative;
+	background: var(--video-player-secondary-color);
+}
+
+.progress-area .progress-bar::before {
+	content: "";
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	height: 13px;
+	width: 13px;
+	border-radius: 50%;
+	background: inherit;
+	position: absolute;
+}
+
+.progress-area span, .progress-area .progress-bar::before {
+	display: none;
+}
+
+.video-timeline:hover .progress-area span,
+.video-timeline:hover .progress-area .progress-bar::before {
+	display: block;
+}
+
+.video-controls {
+	padding: 5px 20px 10px;
+}
+
+.video-controls .options {
+	width: 100%;
+}
+
+.video-controls .options:first-child {
+	justify-content: flex-start;
+}
+
+.video-controls .options:last-child {
+	justify-content: flex-end;
+}
+
+.options button {
+	width: 40px;
+	height: 40px;
+	border: none;
+	color: var(--video-player-primary-color);
+	cursor: pointer;
+	font-size: 19px;
+	background: none;
+}
+
+.options button :where(i, span) {
+	width: 100%;
+	height: 100%;
+	line-height: 40px;
+}
+
+.options input {
+	height: 4px;
+	max-width: 75px;
+}
+
+.options .video-timer {
+	font-size: 14px;
+	color: var(--video-player-primary-color);
+	margin-left: 15px;
+}
+
+/*.options input[type="range"] {
+	-webkit-appearance: none;
+	background: var(--video-player-secondary-color);
+}*/
+
+.video-timer .separator {
+	font-size: 16px;
+	margin: 0 5px;
+}
+
+.settings-content {
+	position: relative;
+}
+
+.settings-content .settings-options {
+	position: absolute;
+	bottom: 40px;
+	left: -40px;
+	width: 80px;
+	opacity: 0;
+	pointer-events: none;
+	list-style: none;
+	background: var(--video-player-primary-color);
+	border-radius: 4px;
+	transition: opacity 0.13s ease;
+}
+
+.settings-content button:hover ~ .settings-options {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.settings-options li {
+	font-size: 14px;
+	padding: 5px 0 5px 15px;
+	cursor: pointer;
+}
+
+.settings-options li.active {
+	color: var(--video-player-primary-color);
+	background: var(--video-player-secondary-color);
+}
+
+.container video {
+	width: 100%;
+}
