@@ -12,7 +12,7 @@
 #==============================================================================
 import os
 import time
-import platform
+# import platform
 import jmespath
 from selenium import webdriver
 from selenium.common.exceptions import *
@@ -25,7 +25,7 @@ from settings import *
 from find_captcha import Find_Captcha
 
 
-OS = platform.system()
+# OS = platform.system()
 page_extension = "-online-for-free.html"
 
 
@@ -429,41 +429,41 @@ class Scraper(Find_Captcha):
 		print(f"\tCompleted scraping in {round(time.time()-get_video_url_timestamp,2)}s.")
 		return results, 200, [video_url], page_link
 
-	def run(self):
-		while True:
-			url = self.get_video_url_from_page_link(
-				self.get_first_page_link_from_search(
-					self.search(
-						input("\nEnter movie title:\n> "),
-						top_result_only=True
-					)
-				)
-			)
+# 	def run(self):
+# 		while True:
+# 			url = self.get_video_url_from_page_link(
+# 				self.get_first_page_link_from_search(
+# 					self.search(
+# 						input("\nEnter movie title:\n> "),
+# 						top_result_only=True
+# 					)
+# 				)
+# 			)
 
-			if url == 404:
-				print("ERROR: Page error 404!")
-				continue
+# 			if url == 404:
+# 				print("ERROR: Page error 404!")
+# 				continue
 
-			print(url[0])
-			# print(url)
+# 			print(url[0])
+# 			# print(url)
 
-		wait_for_input()
-
-
-def wait_for_input():
-	print()
-	if OS == "Windows":  # Only works on Windows
-		os.system("pause")
-	else:                # Works for MacOS and Linux
-		print("Press any key to continue...", end="", flush=True)
-		os.system("read -n1 -r")
-
-def main():
-	scraper = Scraper()
-	# scraper.run()
-	print(scraper.find_data_from_url("https://gomovies-online.cam/watch-tv-show/rick-and-morty-season-6/dFl1ohVT/6SfvSx4p-online-for-free.html"))
-	# scraper.close()
+# 		wait_for_input()
 
 
-if __name__ == "__main__":
-	main()
+# def wait_for_input():
+# 	print()
+# 	if OS == "Windows":  # Only works on Windows
+# 		os.system("pause")
+# 	else:                # Works for MacOS and Linux
+# 		print("Press any key to continue...", end="", flush=True)
+# 		os.system("read -n1 -r")
+
+# def main():
+# 	scraper = Scraper()
+# 	# scraper.run()
+# 	print(scraper.find_data_from_url("https://gomovies-online.cam/watch-tv-show/rick-and-morty-season-6/dFl1ohVT/6SfvSx4p-online-for-free.html"))
+# 	# scraper.close()
+
+
+# if __name__ == "__main__":
+# 	main()

@@ -16,16 +16,16 @@ import json
 import os
 import sqlite3
 
+import requests
 from flask import Flask, redirect, render_template, request, url_for
 from oauthlib.oauth2 import WebApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InsecureTransportError
-import requests
 from flask_login import (
 	LoginManager,
 	current_user,
 	login_required,
 	login_user,
-	logout_user,
+	logout_user
 )
 
 from database import init_db_command
@@ -45,8 +45,6 @@ app.secret_key = os.urandom(24)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
-scraper = Scraper()
-
 
 @login_manager.unauthorized_handler
 def unauthorized():
@@ -62,6 +60,9 @@ except sqlite3.OperationalError:
 
 # OAuth2 client setup
 client = WebApplicationClient(GOOGLE_CLIENT_ID)
+
+# Web scraping setup
+scraper = Scraper()
 
 
 # Flask-Login helper to retrieve a user from the database

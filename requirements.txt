@@ -8,3 +8,4 @@ webdriver-manager
 selenium
 oauthlib
 cryptography
+jmespath
