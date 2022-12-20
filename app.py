@@ -70,13 +70,13 @@ scraper = Scraper()
 def load_user(user_id):
 	return User.get(user_id)
 
-@app.before_request
-def before_request():
-	if not request.is_secure:
-		url = request.url.replace("http://", "https://", 1)
-		code = 301
-		return redirect(url, code=code)
-	return None
+# @app.before_request
+# def before_request():
+# 	if not request.is_secure:
+# 		url = request.url.replace("http://", "https://", 1)
+# 		code = 301
+# 		return redirect(url, code=code)
+# 	return None
 
 @app.route("/")
 @app.route("/<video_url>")
@@ -168,7 +168,7 @@ def login():
 	# scopes that let you retrieve user's profile from Google
 	request_uri = client.prepare_request_uri(
 		authorization_endpoint,
-		redirect_uri=request.base_url + "/callback",
+		redirect_uri=request.base_url.replace("http://", "https://", 1) + "/callback",
 		scope=["openid", "email", "profile"],
 	)
 	return redirect(request_uri)
