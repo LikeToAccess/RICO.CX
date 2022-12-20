@@ -9,3 +9,4 @@ selenium
 oauthlib
 cryptography
 jmespath
+waitress
