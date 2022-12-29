@@ -8,8 +8,8 @@ from settings import (
 
 
 def main():
-	serve(app.app, host=HOST, port=PORT, threads=12)
-	# app.app.run(host="0.0.0.0", port=8080, debug=True)
+	serve(app.app, host=HOST, port=PORT, threads=12, url_scheme="https")
+	# app.app.run(host=HOST, port=PORT, debug=True, ssl_context="adhoc")
 
 
 if __name__ == "__main__":

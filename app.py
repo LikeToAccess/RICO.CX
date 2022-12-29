@@ -45,12 +45,6 @@ app.secret_key = os.urandom(24)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
-
-@login_manager.unauthorized_handler
-def unauthorized():
-	return "You must be logged in to access this content.", 403
-
-
 # Naive database setup
 try:
 	init_db_command()
@@ -65,18 +59,29 @@ client = WebApplicationClient(GOOGLE_CLIENT_ID)
 scraper = Scraper()
 
 
+@login_manager.unauthorized_handler
+def unauthorized():
+	return "You must be logged in to access this content.", 403
+
 # Flask-Login helper to retrieve a user from the database
 @login_manager.user_loader
 def load_user(user_id):
-	return User.get(user_id)
+	user = User.get(user_id)
+	# If user does not belong to any groups, return None
+	if user.get("id") in Group_Membership.get(user_id):
+		return user
+	return "You are not authorized to access this content.", 403
 
 # @app.before_request
 # def before_request():
 # 	if not request.is_secure:
 # 		url = request.url.replace("http://", "https://", 1)
 # 		code = 301
-# 		return redirect(url, code=code)
-# 	return None
+# 		# print(f"WARNING: {request.url} is not secure, redirecting to {url}")
+# 		print(f"WARNING: {request.url} is not secure")
+# 		# return redirect(url, code=code)
+# 	print(f"INFO: {request.url} is secure")
+# 	# return f"Is already secure {request.url}"
 
 @app.route("/")
 @app.route("/<video_url>")
