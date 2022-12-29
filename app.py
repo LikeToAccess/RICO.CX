@@ -68,7 +68,7 @@ def unauthorized():
 def load_user(user_id):
 	user = User.get(user_id)
 	# If user does not belong to any groups, return None
-	if user.get("id") in Group_Membership.get(user_id):
+	if Group_Membership.get(user_id):
 		return user
 	return "You are not authorized to access this content.", 403
 
