@@ -66,11 +66,7 @@ def unauthorized():
 # Flask-Login helper to retrieve a user from the database
 @login_manager.user_loader
 def load_user(user_id):
-	user = User.get(user_id)
-	# If user does not belong to any groups, return None
-	if Group_Membership.get(user_id):
-		return user
-	return "You are not authorized to access this content.", 403
+	return User.get(user_id)
 
 # @app.before_request
 # def before_request():
@@ -240,6 +236,10 @@ def callback():
 		# Doesn't exist? Add to database
 		if not User.get(unique_id):
 			User.create(unique_id, first_name, last_name, email, picture)
+
+		# Not a member of any group? Return 403
+		if not Group_Membership.get(unique_id):
+			return "You are not authorized to access this content.", 403
 
 		# Begin user session by logging the user in
 		login_user(user)
