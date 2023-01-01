@@ -28,7 +28,7 @@ from flask_login import (
 	logout_user
 )
 
-from database import init_db_command
+from database import init_db_command, get_db
 from user import User
 from group import Group_Membership
 from scraper import Scraper
@@ -48,6 +48,7 @@ login_manager.init_app(app)
 # Naive database setup
 try:
 	init_db_command()
+	print("DB first-time initialization complete.")
 except sqlite3.OperationalError:
 	# Assume it's already been created
 	pass
@@ -92,6 +93,52 @@ def index(video_url=None):
 		current_user=current_user,
 		group=group,
 		video_url=video_url
+	)
+
+# Handle delete, ban, and change_role POST requests to /admin
+@app.route("/admin", methods=["POST"])
+@login_required
+def admin_panel_managment():
+	print(Group_Membership.get(current_user.id).role)
+	if Group_Membership.get(current_user.id).role not in ["Administrators", "Root"]:
+		return "You are not authorized to access this page.", 403
+
+	# Get the user to modify
+	user_id = request.form.get("user_id")
+	user = User.get(user_id)
+
+	# Get the action to perform
+	action = request.form.get("action")
+
+	# Perform the action
+	if action == "delete":
+		user.delete()
+	elif action == "ban":
+		user.ban()
+	elif action == "unban":
+		user.unban()
+	elif action == "change_role":
+		user.change_role(request.form.get("role"))
+	else:
+		return "Invalid action.", 400
+
+	return redirect(url_for("admin"))
+
+@app.route("/admin")
+@login_required
+def admin():
+	group = Group_Membership.get(current_user.id)
+
+	if not group and group.role in ["Administrators", "Root"]:
+		return "You must be an admin to access this content.", 403
+
+	users = User.get_all()
+	groups = Group_Membership.get_all()
+
+	return render_template(
+		"pages/admin.html",
+		users=users,
+		groups=groups
 	)
 
 @app.route("/api/v1/search/<query>", methods=["GET"])
@@ -257,6 +304,10 @@ def callback():
 def logout():
 	logout_user()
 	return redirect(url_for("index"))
+
+@app.route("/test")
+def test():
+	return {"message": "OK"}, 200
 
 
 def get_google_provider_cfg():

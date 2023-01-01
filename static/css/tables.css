@@ -1,0 +1,27 @@
+#users {
+/*	font-family: Arial, Helvetica, sans-serif;*/
+	border-collapse: collapse;
+	width: 90%;
+	margin: 0 auto;
+}
+
+#users td, #users th {
+	border: 1px solid var(--background-color);
+	padding: 8px;
+}
+
+#users tr:nth-child(even){background-color: var(--result-card-background-color);}
+
+#users tr:hover {background-color: var(--background-color);}
+
+#users th {
+	padding-top: 12px;
+	padding-bottom: 12px;
+	text-align: left;
+	background-color: var(--body-color);
+	color: var(--secondary-color);
+}
+
+#users tr.banned {
+	color: #FF0000;
+}

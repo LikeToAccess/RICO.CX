@@ -4,8 +4,9 @@
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1">
 	<title>{% block title %}{% endblock %}</title>
-	<!-- <link rel="stylesheet" type="text/css" href="{{ url_for("static", filename="css/style.css") }}"> -->
+
 	<link rel="stylesheet" type="text/css" href="/static/css/style.css">
+	<link rel="stylesheet" type="text/css" href="/static/css/video-player.css">
 	<link rel="stylesheet" type="text/css" href="/static/css/animation.css">
 	<link rel="stylesheet" type="text/css" href="/static/css/font-awesome-6.2.1.min.css">
 	<link rel="stylesheet" type="text/css" href="/static/css/material-symbols-rounded.css">
@@ -15,25 +16,14 @@
 	<script src="/static/js/script.js" defer></script>
 	<script src="/static/js/video-player.js" type="text/javascript" defer></script>
 	<script src="/static/js/settings.js" type="text/javascript"></script>
-	<!-- <script src="https://accounts.google.com/gsi/client" async defer></script> -->
 	<link rel="shortcut icon" type="image/png" href="/static/ico/favicon.png"/>
 </head>
 <body>
 <header>
 	<h1 class="title">{% block title_h1 %}{% endblock %}</h1>
-	<!-- <div
-		id="g_id_onload"
-		data-client_id="788220717359-mqsrau2lmb85l94f68febkpb8fnbgj82.apps.googleusercontent.com"
-		data-auto_select="true"
-		data-callback="handleCredentialResponse">
-	</div> -->
 </header>
 
 <main>
-	<!-- <video id="video" src="MEDIA/108802760954752258469.mp4" controls preload="auto">
-		<source type="video/mp4">
-		Unsupported browser.
-	</video> -->
 	<div class="search-container">
 		<form id="input-section" autocomplete="off">
 			<input type="text" id="search-term-id">
@@ -122,6 +112,10 @@
 		<a class="button" href="/logout">Logout</a>
 		{% if group %}
 			<p>You are a member of, <i>{{ group.role }}</i> (with GID: {{ group.group_id }})</p>
+		{% endif %}
+		<!-- User is at least Administrator -->
+		{% if group and group.role in ["Administrators", "Root"] %}
+			<a href="/admin">Admin Portal</a>
 		{% endif %}
 	{% endif %}
 	<!-- {% block content %}{% endblock %} -->

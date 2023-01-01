@@ -53,7 +53,7 @@
 	left: 50%;
 	top: -25px;
 	font-size: 13px;
-	color: var(--video-player-primary-color);
+	color: var(--primary-color);
 	transform: translateX(-50%);
 }
 
@@ -61,7 +61,7 @@
 	width: 0%;
 	height: 100%;
 	position: relative;
-	background: var(--video-player-secondary-color);
+	background: var(--secondary-color);
 }
 
 .progress-area .progress-bar::before {
@@ -105,7 +105,7 @@
 	width: 40px;
 	height: 40px;
 	border: none;
-	color: var(--video-player-primary-color);
+	color: var(--primary-color);
 	cursor: pointer;
 	font-size: 19px;
 	background: none;
@@ -124,13 +124,13 @@
 
 .options .video-timer {
 	font-size: 14px;
-	color: var(--video-player-primary-color);
+	color: var(--primary-color);
 	margin-left: 15px;
 }
 
 /*.options input[type="range"] {
 	-webkit-appearance: none;
-	background: var(--video-player-secondary-color);
+	background: var(--secondary-color);
 }*/
 
 .video-timer .separator {
@@ -150,7 +150,7 @@
 	opacity: 0;
 	pointer-events: none;
 	list-style: none;
-	background: var(--video-player-primary-color);
+	background: var(--primary-color);
 	border-radius: 4px;
 	transition: opacity 0.13s ease;
 }
@@ -167,8 +167,8 @@
 }
 
 .settings-options li.active {
-	color: var(--video-player-primary-color);
-	background: var(--video-player-secondary-color);
+	color: var(--primary-color);
+	background: var(--secondary-color);
 }
 
 .container video {
