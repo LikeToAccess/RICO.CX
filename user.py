@@ -81,6 +81,9 @@ class User(UserMixin):
 		db.execute(
 			"DELETE FROM user WHERE user_id = ?", (self.id,)
 		)
+		db.execute(
+			"DELETE FROM group_members WHERE user_id = ?", (self.id,)
+		)
 		db.commit()
 
 	def ban(self):
@@ -100,6 +103,8 @@ class User(UserMixin):
 		db.commit()
 
 	def change_role(self, role):
+		if role == "None" or not role:
+			return
 		db = get_db()
 		if role.isnumeric():
 			role_id = role

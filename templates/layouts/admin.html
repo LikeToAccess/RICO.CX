@@ -68,6 +68,9 @@
 						<input type="hidden" name="action" value="change_role">
 						<select name="role">
 							<optgroup label="Standard">
+								{% if ns.found == False %}
+									<option selected>None</option>
+								{% endif %}
 								{% if ns.found == "100" %}
 									<option value="100" selected>User</option>
 								{% else %}
@@ -88,6 +91,7 @@
 							</optgroup>
 						</select>
 						<input type="submit" value="Change Role">
+						<!-- <input type="submit" value="Remove Role"> -->
 					</form>
 					{% if user.banned %}
 						<form action="/admin" method="post">
@@ -106,9 +110,8 @@
 			</tr>
 		{% endfor %}
 	</table>
+	<a href="/">Home</a>
 </main>
-<footer>
-	<p>&copy; 2022 - LikeToAccess</p>
-</footer>
+{% include "includes/footer.html" %}
 </body>
 </html>

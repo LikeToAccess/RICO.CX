@@ -34,7 +34,11 @@
 	<div style="margin: 85px;"></div>
 
 	<div class="video-player">
-	<div class="container">
+	{% if video_url %}
+		<div class="container">
+	{% else %}
+		<div class="container" hidden>
+	{% endif %}
 		<div class="wrapper">
 			<div class="video-timeline">
 				<div class="progress-area">
@@ -76,15 +80,15 @@
 				</li>
 			</ul>
 		</div>
-		{% if current_user.is_authenticated %}
+		{% if user.is_authenticated %}
 			<video id="video-id" preload="metadata" src="{{ video_url }}"></video>
 		{% else %}
-			<video id="video-id" preload="metadata" autoplay muted loop src="/static/video/loading.mp4"></video>
+			<!-- <video id="video-id" preload="metadata" autoplay muted loop src="/static/video/loading.mp4"></video> -->
 		{% endif %}
 	</div>
 	</div>
 
-	{% if not current_user.is_authenticated %}
+	{% if not user.is_authenticated %}
 		<div class="overlay" id="login-modal">
 			<div id="login-container">
 				<p>Login</p>
@@ -103,26 +107,15 @@
 		</div>
 	{% endif %}
 
-	{% if current_user.is_authenticated %}
-		<p>Hello, {{ current_user.first_name }}! You're logged in! Email: {{ current_user.email }}</p>
-		<div>
-			<p>Google Profile Picture:</p>
-			<img src="{{ current_user.profile_pic }}" alt="Google profile picture"></img>
-		</div>
-		<a class="button" href="/logout">Logout</a>
-		{% if group %}
-			<p>You are a member of, <i>{{ group.role }}</i> (with GID: {{ group.group_id }})</p>
+	<div style="margin: 10px;">
+		{% if not group %}
+			<p>You are viewing this page without access. Check account status <a href="/pending">here</a>.</p>
+			<br>
 		{% endif %}
-		<!-- User is at least Administrator -->
-		{% if group and group.role in ["Administrators", "Root"] %}
-			<a href="/admin">Admin Portal</a>
-		{% endif %}
-	{% endif %}
-	<!-- {% block content %}{% endblock %} -->
+		{% include "includes/account.html" %}
+		<!-- {#% block content %}{% endblock %#} -->
+	</div>
 </main>
-
-<footer>
-	<p>&copy; 2022 - LikeToAccess</p>
-</footer>
+{% include "includes/footer.html" %}
 </body>
 </html>

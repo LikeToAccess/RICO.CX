@@ -39,17 +39,18 @@ resume_video_url = getCookie("video_url");
 if (resume_video_url) {
 	console.log("Resuming video from cookie");
 	document.getElementById("video-id").src = resume_video_url;
+	showVideoPlayer();
 }
 
 function handleSearchoneResponse(response) {
 	// console.log(response);
 	json = JSON.parse(response.responseText);
-	console.log("Submitting getvideo for: "+ json.data[0].url);
-	// console.log("handleSearchoneResponse: "+ JSON.stringify(json.data[0]));
-	// console.log(json.data[0]);
-	// console.log(json.data[0].url);
-	// document.getElementById("video-id").poster = json.data[0].poster_url;
-	httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?video_url="+ json.data[0].url, handleGetvideoResponse);
+	console.log("Submitting getvideo for: "+ json.data.page_url);
+	// console.log("handleSearchoneResponse: "+ JSON.stringify(json.data));
+	// console.log(json.data);
+	// console.log(json.data.page_url);
+	// document.getElementById("video-id").poster = json.data.poster_url;
+	httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?video_url="+ json.data.page_url, handleGetvideoResponse);
 }
 
 function handleCaptchaResponse(response) {
@@ -67,6 +68,10 @@ function handleCaptchaResponse(response) {
 	}
 }
 
+function showVideoPlayer() {
+	document.getElementsByClassName("container")[0].removeAttribute("hidden");
+}
+
 function handleGetvideoResponse(response) {
 	preloader = document.getElementsByClassName("preloader")[0];
 	if (preloader) preloader.remove();
@@ -79,6 +84,7 @@ function handleGetvideoResponse(response) {
 		expires = json.data.split("~exp=")[1].split("~acl=/*~hmac=")[0];
 		setCookie("video_url", json.data, expires);
 		document.getElementById("video-id").src = json.data;
+		showVideoPlayer();
 	} else if (response.status == 225) {
 		const captchaImage = json.data;
 		const video_url = json.video_url;

@@ -197,7 +197,7 @@ class Scraper(Find_Captcha):
 		return [data]
 
 	def searchone(self, query):
-		return self.search(query, top_result_only=True)
+		return self.search(query, top_result_only=True)[0]
 
 	def search(self, search_term, top_result_only=False):
 		# https://gomovies-online.cam/watch-tv-show/mr-robot-season-4/cYqlqU9U/t5f85jpg/h2586jt3-online-for-free.html
@@ -284,8 +284,8 @@ class Scraper(Find_Captcha):
 			results_data.append(
 				{
 					"title":      title,
+					"page_url":   url,
 					"poster_url": poster_url,
-					"url":        url,
 					"data":       search_data,
 				}
 			)
@@ -331,9 +331,9 @@ class Scraper(Find_Captcha):
 
 		return original_video_url, best_quality
 
-	def get_video(self, url, timeout=30):
-		if self.current_url() != url:
-			self.open_link(url)
+	def get_video(self, page_url, timeout=30):
+		if self.current_url() != page_url:
+			self.open_link(page_url)
 
 		data = self.convert_data_from_page_link(self.current_url(), timeout=timeout)
 

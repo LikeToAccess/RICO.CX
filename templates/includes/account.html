@@ -1,0 +1,15 @@
+{% if user.is_authenticated %}
+	<p>Hello, {{ user.name }}! You're logged in! Email: {{ user.email }}</p>
+	<div>
+		<p>Google Profile Picture:</p>
+		<img src="{{ user.profile_pic }}" alt="Google profile picture"></img>
+	</div>
+	<a class="button" href="/logout">Logout</a>
+	{% if group %}
+		<p>You are a member of, <i>{{ group.role }}</i> (with GID: {{ group.group_id }})</p>
+	{% endif %}
+	<!-- User is at least Administrator -->
+	{% if group and group.role in ["Administrators", "Root"] %}
+		<a href="/admin">Admin Portal</a>
+	{% endif %}
+{% endif %}

@@ -28,7 +28,8 @@ from flask_login import (
 	logout_user
 )
 
-from database import init_db_command, get_db
+import download_engine
+from database import init_db_command
 from user import User
 from group import Group_Membership
 from scraper import Scraper
@@ -80,8 +81,28 @@ def load_user(user_id):
 # 	print(f"INFO: {request.url} is secure")
 # 	# return f"Is already secure {request.url}"
 
+def public_route(decorated_function):
+	decorated_function.is_public = True
+	return decorated_function
+
+@app.before_request
+def check_route_access():
+	if current_user.is_authenticated:
+		# User is banned? Return them to the shadow realm
+		print(request.endpoint)
+		if User.get(current_user.id).banned and not request.endpoint.startswith("banned"):
+			return redirect(url_for("banned"))
+		return  # Access granted (logged in + not banned)
+	if any([
+			request.endpoint.startswith("static"),
+			getattr(app.view_functions[request.endpoint], "is_public", False)
+		]):
+		return  # Access granted (public or static route)
+	return redirect(url_for("login"))  # Send to login page (not logged in)
+
 @app.route("/")
 @app.route("/<video_url>")
+@public_route
 def index(video_url=None):
 	# print(request.args.get("video_url"))
 	# print(video_url)
@@ -90,7 +111,7 @@ def index(video_url=None):
 
 	return render_template(
 		"pages/home.html",
-		current_user=current_user,
+		user=current_user,
 		group=group,
 		video_url=video_url
 	)
@@ -141,6 +162,40 @@ def admin():
 		groups=groups
 	)
 
+@app.route("/pending")
+def pending():
+	if not current_user.is_authenticated:
+		return redirect(url_for("login"))
+
+	group = Group_Membership.get(current_user.id)
+	user = User.get(current_user.id)
+
+	if group:
+		return redirect(url_for("index"))
+
+	return render_template(
+		"pages/pending.html",
+		user=user
+	)
+
+@app.route("/banned")
+@public_route
+def banned():
+	if not current_user.is_authenticated:
+		print("DEBUG: Not Auth")
+		return redirect(url_for("index"))
+
+	user = User.get(current_user.id)
+	if user.banned:
+		print("DEBUG: Is Banned")
+		return render_template(
+			"pages/banned.html",
+			user=user
+		)
+
+	print("DEBUG: Not Banned")
+	return redirect(url_for("index"))
+
 @app.route("/api/v1/search/<query>", methods=["GET"])
 @app.route("/api/v1/search", methods=["GET"])
 @login_required
@@ -171,14 +226,14 @@ def searchone(query=None):
 		return {"message": "No results found"}, 404
 	return {"message": "OK", "data": data}, 200
 
-@app.route("/api/v1/getvideo/<video_url>", methods=["GET"])
+@app.route("/api/v1/getvideo/<page_url>", methods=["GET"])
 @app.route("/api/v1/getvideo", methods=["GET"])
 @login_required
-def getvideo(video_url=None):
-	video_url = request.args.get("video_url", video_url)
-	if video_url is None:
-		return {"message": "No video_url provided"}, 400
-	data = scraper.get_video(video_url)
+def getvideo(page_url=None):
+	page_url = request.args.get("page_url", page_url)
+	if page_url is None:
+		return {"message": "No page_url provided"}, 400
+	data = scraper.get_video(page_url)
 
 	if data == 404:
 		return {"message": "No results found"}, 404
@@ -186,27 +241,43 @@ def getvideo(video_url=None):
 		print("CAPTCHA")
 		image_data = base64.b64encode(open("captcha.png", "rb").read()).decode("utf-8")
 		image_data = f"data:image/png;base64,{image_data}"
-		return {"message": "CAPTCHA", "data": image_data, "video_url": video_url}, 225
+		return {"message": "CAPTCHA", "data": image_data, "page_url": page_url}, 225
 	return {"message": "OK", "data": data}, 200
 
 @app.route("/api/v1/captcha", methods=["POST"])
 @login_required
 def captcha():
 	captcha_response = request.args.get("captcha_response")
-	video_url = request.args.get("video_url")
+	page_url = request.args.get("page_url")
 	if not captcha_response:
 		return {"message": "No captcha_response provided"}, 400
-	if not video_url:
-		return {"message": "No video_url provided"}, 400
+	if not page_url:
+		return {"message": "No page_url provided"}, 400
 	data = scraper.resolve_captcha(captcha_response)
 	if not data:
 		image_data = base64.b64encode(open("captcha.png", "rb").read()).decode("utf-8")
 		image_data = f"data:image/png;base64,{image_data}"
-		return {"message": "CAPTCHA failed", "data": image_data, "video_url": video_url}, 225
-	return {"message": "CAPTCHA solved", "video_url": video_url}, 200
+		return {"message": "CAPTCHA failed", "data": image_data, "page_url": page_url}, 225
+	return {"message": "CAPTCHA solved", "page_url": page_url}, 200
 	# return {"message": "OK", "data": data}, 200
 
+@app.route("/api/v1/download/<url>", methods=["POST"])
+@app.route("/api/v1/download", methods=["POST"])
+@login_required
+def download(url):
+	filename = "~/Desktop/movie.mp4"  # TODO: Use the propper filename instead
+	download_engine.queue.append({"url": url, "filename": filename})
+	print("Download queued...")
+	print(f"DEBUG: {download_engine.queue}")
+	for i in range(len(download_engine.queue)):
+		download_engine.download_file(i)
+
+	print("DEBUG: Download finished!")
+	# Remove the item from the queue after the download is finished
+	download_engine.queue.remove({"url": url, "filename": filename})
+
 @app.route("/login")
+@public_route
 def login():
 	# Find out what URL to hit for Google login
 	google_provider_cfg = get_google_provider_cfg()
@@ -223,6 +294,7 @@ def login():
 
 
 @app.route("/login/callback")
+@public_route
 def callback():
 	try:
 		# Get authorization code Google sent back to you
@@ -284,12 +356,21 @@ def callback():
 		if not User.get(unique_id):
 			User.create(unique_id, first_name, last_name, email, picture)
 
-		# Not a member of any group? Return 403
-		if not Group_Membership.get(unique_id):
-			return "You are not authorized to access this content.", 403
-
 		# Begin user session by logging the user in
-		login_user(user)
+		login_user(user, remember=True)
+
+		# User is banned? Return banned page
+		if user.banned:
+			return redirect(url_for("banned"))
+
+		# Not a member of any group? Return waiting page
+		if not Group_Membership.get(unique_id):
+			return redirect(url_for("pending"))
+			# return render_template(
+			# 	"pages/pending_approval.html",
+			# 	current_user=current_user
+			# )
+
 
 		# Send user back to homepage
 		return redirect(url_for("index"))
@@ -308,7 +389,6 @@ def logout():
 @app.route("/test")
 def test():
 	return {"message": "OK"}, 200
-
 
 def get_google_provider_cfg():
 	return requests.get(GOOGLE_DISCOVERY_URL, timeout=30).json()
