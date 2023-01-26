@@ -72,7 +72,8 @@ def downloader(position: int, resume_position: int = None, retry_count: int = 0)
 	with open(filename, mode) as file:
 		with tqdm(total=remote_file_size, unit="B",
 				  unit_scale=True, unit_divisor=1024,
-				  desc="        "+filename.split("/")[-1], initial=initial_pos,
+				  desc="        "+filename.split("/")[-1].split("\\")[-1],
+				  initial=initial_pos,
 				  ascii=True, miniters=1) as pbar:
 			try:
 				if DEBUG_MODE:

@@ -33,6 +33,7 @@ from database import init_db_command
 from user import User
 from group import Group_Membership
 from scraper import Scraper
+from file import read_image
 from settings import (
 	GOOGLE_CLIENT_ID,
 	GOOGLE_CLIENT_SECRET,
@@ -89,15 +90,15 @@ def public_route(decorated_function):
 def check_route_access():
 	if current_user.is_authenticated:
 		# User is banned? Return them to the shadow realm
-		print(request.endpoint)
 		if User.get(current_user.id).banned and not request.endpoint.startswith("banned"):
 			return redirect(url_for("banned"))
 		return  # Access granted (logged in + not banned)
 	if any([
-			request.endpoint.startswith("static"),
-			getattr(app.view_functions[request.endpoint], "is_public", False)
-		]):
-		return  # Access granted (public or static route)
+		request.endpoint.startswith("static"),
+		request.host_url.startswith("https://127.0.0.1:9000/"),
+		getattr(app.view_functions[request.endpoint], "is_public", False)
+	]):
+		return  # Access granted (public or static route or localhost)
 	return redirect(url_for("login"))  # Send to login page (not logged in)
 
 @app.route("/")
@@ -198,7 +199,6 @@ def banned():
 
 @app.route("/api/v1/search/<query>", methods=["GET"])
 @app.route("/api/v1/search", methods=["GET"])
-@login_required
 def search(query=None):
 	query = request.args.get("query", query)
 	# print(query)
@@ -213,7 +213,6 @@ def search(query=None):
 
 @app.route("/api/v1/searchone/<query>", methods=["GET"])
 @app.route("/api/v1/searchone", methods=["GET"])
-@login_required
 def searchone(query=None):
 	query = request.args.get("query", query)
 	# print(query)
@@ -233,14 +232,15 @@ def getvideo(page_url=None):
 	page_url = request.args.get("page_url", page_url)
 	if page_url is None:
 		return {"message": "No page_url provided"}, 400
+	# parsed = json.loads(base64.b64decode(page_url).decode("utf-8"))
+	# page_url = parsed["page_url"]
 	data = scraper.get_video(page_url)
 
 	if data == 404:
 		return {"message": "No results found"}, 404
 	if data == 225:
 		print("CAPTCHA")
-		image_data = base64.b64encode(open("captcha.png", "rb").read()).decode("utf-8")
-		image_data = f"data:image/png;base64,{image_data}"
+		image_data = read_image("captcha.png")
 		return {"message": "CAPTCHA", "data": image_data, "page_url": page_url}, 225
 	return {"message": "OK", "data": data}, 200
 
@@ -255,8 +255,7 @@ def captcha():
 		return {"message": "No page_url provided"}, 400
 	data = scraper.resolve_captcha(captcha_response)
 	if not data:
-		image_data = base64.b64encode(open("captcha.png", "rb").read()).decode("utf-8")
-		image_data = f"data:image/png;base64,{image_data}"
+		image_data = read_image("captcha.png")
 		return {"message": "CAPTCHA failed", "data": image_data, "page_url": page_url}, 225
 	return {"message": "CAPTCHA solved", "page_url": page_url}, 200
 	# return {"message": "OK", "data": data}, 200
@@ -264,7 +263,10 @@ def captcha():
 @app.route("/api/v1/download/<url>", methods=["POST"])
 @app.route("/api/v1/download", methods=["POST"])
 @login_required
-def download(url):
+def download(url, result=None):
+	result = request.args.get("result", result)
+	if result is None:
+		result = scraper.find_data_from_url(url)
 	filename = "~/Desktop/movie.mp4"  # TODO: Use the propper filename instead
 	download_engine.queue.append({"url": url, "filename": filename})
 	print("Download queued...")

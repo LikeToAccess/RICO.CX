@@ -27,6 +27,7 @@ from find_captcha import Find_Captcha
 
 # OS = platform.system()
 page_extension = "-online-for-free.html"
+country_codes = read_json_file("country_codes.json")
 
 
 class Scraper(Find_Captcha):
@@ -36,6 +37,7 @@ class Scraper(Find_Captcha):
 		user_data_dir = os.path.abspath("selenium_data")
 		options.add_argument("autoplay-policy=no-user-gesture-required")
 		options.add_argument("log-level=3")
+		options.add_experimental_option("prefs", {"download_restrictions": 3})  # Disable downloads
 		options.add_argument(f"user-data-dir={user_data_dir}")
 		options.add_argument("--ignore-certificate-errors-spki-list")
 		if HEADLESS:
@@ -111,17 +113,13 @@ class Scraper(Find_Captcha):
 
 		return subtitles
 
-	def find_data_from_url(self, url):
-		print("Adding media via direct link...")
-		# movie = bool(
-		# 	self.find_element_by_xpath(
-		# 		"/html/body/main/div/div/section/section/ul/li[2]/div/a"
-		# 	).text == "MOVIES"
-		# )
-		movie = "/watch-film/" in url and "/watch-tv-show/" not in url
+	def find_data_from_url(self, page_url):
+		print("Grabbing metadata...")
+		start_time = time.time()
+		movie = "/watch-film/" in page_url and "/watch-tv-show/" not in page_url
 
-		if movie: url += "-online-for-free.html" if not url.endswith("-online-for-free.html") else ""
-		if self.current_url() != url: self.open_link(url)
+		if movie: page_url += "-online-for-free.html" if not page_url.endswith("-online-for-free.html") else ""
+		if self.current_url() != page_url: self.open_link(page_url)
 
 		base_element = self.find_element_by_xpath("//*[@class='_sxfctqTgvOf _sYsfmtEcNNg']")
 		title = base_element.find_element(By.XPATH, value="div[2]/div[1]/div[1]/h1").text
@@ -190,38 +188,20 @@ class Scraper(Find_Captcha):
 		data = {
 			"title":      title,
 			"poster_url": poster_url,
-			"url":        url,
+			"page_url":   page_url,
 			"data":       data,
 		}
 
-		return [data]
+		print(f"\tGot data for '{data['title']}' in {time.time() - start_time:.2f} seconds.")
+		return data
 
-	def searchone(self, query):
-		return self.search(query, top_result_only=True)[0]
-
-	def search(self, search_term, top_result_only=False):
-		# https://gomovies-online.cam/watch-tv-show/mr-robot-season-4/cYqlqU9U/t5f85jpg/h2586jt3-online-for-free.html
-		if search_term.startswith("https://"):
-			url = search_term
-			if not url.endswith("-online-for-free.html"):
-				if "/watch-film/" in url and "/watch-tv-show/" not in url:
-					url += page_extension
-				else:
-					print("WARNING: 'search_term' should be a direct link to video page!")
-					print(f"\tGot: '{search_term}'")
-					return 404
-
-			self.open_link(url)
-			# self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-			return self.find_data_from_url(url)
-
-		print("Waiting for search results...")
-		search_timestamp = time.time()
-		self.open_link(f"https://gomovies-online.cam/search/{search_term}")
-
+	def get_results(self, top_result_only=False):
 		if self.current_page_is_404():
 			print("\tERROR: Page error 404!")
 			return 404
+
+		print("Waiting for search results...")
+		start_time = time.time()
 
 		try:
 			results = self.find_elements_by_xpath("//*[@class='item_hd']") + \
@@ -239,7 +219,20 @@ class Scraper(Find_Captcha):
 		except NoSuchElementException:
 			return 404
 
-		results_data = []
+		print(f"Completed search in {round(time.time()-start_time,2)}s,", end=" ")
+		print(f"found {len(results)} {'result' if len(results) == 1 else 'results'}.")
+
+		return results
+
+	def get_metadata_from_results(self, results):
+		if results == 404:
+			print("\tERROR: No results found!")
+			return 404
+
+		print("Getting metadata from results...")
+		start_time = time.time()
+
+		data = []
 		for result in results:
 			if not result: return 404
 			# Title
@@ -264,6 +257,10 @@ class Scraper(Find_Captcha):
 				"user_rating":         _data_element.get_attribute("data-rating"),
 			}
 
+			if country_codes.get(search_data["release_country"]) in BANNED_COUNTRIES:
+				print(f"\tWARNING: Banned country '{search_data['release_country']}'! Skipping '{title}'...")
+				continue
+
 			search_data["description_preview"], search_data["quality_tag"] = (
 				search_data["description_preview"].strip(". ").rsplit(" ", 1)[0].strip(".") + "...",
 				search_data["quality_tag"].replace("itemAbsolute_", "").upper()
@@ -281,7 +278,7 @@ class Scraper(Find_Captcha):
 				poster_url = poster_url.get_attribute("src")
 				# print(poster_url)
 
-			results_data.append(
+			data.append(
 				{
 					"title":      title,
 					"page_url":   url,
@@ -290,8 +287,52 @@ class Scraper(Find_Captcha):
 				}
 			)
 
-		print(f"Completed search in {round(time.time()-search_timestamp,2)}s,", end=" ")
-		print(f"found {len(results_data)} {'result' if len(results_data) == 1 else 'results'}.")
+		print(
+			"Completed grabbing metadata for",
+			f"{len(data)} {'result' if len(data) == 1 else 'results'}",
+			f"in {round(time.time()-start_time,2)}s."
+		)
+		return data
+
+	def searchone(self, query):
+		return self.search(query, top_result_only=True)[0]
+
+	def search(self, search_term, top_result_only=False):
+		# https://gomovies-online.cam/watch-tv-show/mr-robot-season-4/cYqlqU9U/t5f85jpg/h2586jt3-online-for-free.html
+		if search_term.startswith("https://gomovies-online.cam/"):
+			url = search_term
+
+			# https://gomovies-online.cam/all-films-2
+			if any(["/genres" in url,
+					"/year" in url,
+					"/countries" in url,
+					"/latest" in url,
+					"/all-films-" in url,
+					"/all-tv-shows-" in url,
+					"/best-imdb" in url,
+					"/most-watched" in url]):
+				print("Showing specific catagory...")
+				self.open_link(url)
+			elif not url.endswith("-online-for-free.html"):
+				if "/watch-film/" in url and "/watch-tv-show/" not in url:
+					print("Running via direct link...")
+					url += page_extension
+					self.open_link(url)
+					# self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+					return [self.find_data_from_url(url)]
+				print("WARNING: 'search_term' should be a direct link to video page!")
+				print(f"\tGot: '{search_term}'")
+				return 404
+		else:
+			self.open_link(f"https://gomovies-online.cam/search/{search_term}")
+
+		# Wait for search results
+		results = self.get_results(top_result_only)
+		results_data = self.get_metadata_from_results(results)
+
+		if results_data == 404:
+			print("\tERROR: No results found!")
+			return 404
 
 		return results_data
 
@@ -458,12 +499,15 @@ class Scraper(Find_Captcha):
 # 		print("Press any key to continue...", end="", flush=True)
 # 		os.system("read -n1 -r")
 
-# def main():
-# 	scraper = Scraper()
-# 	# scraper.run()
-# 	print(scraper.find_data_from_url("https://gomovies-online.cam/watch-tv-show/rick-and-morty-season-6/dFl1ohVT/6SfvSx4p-online-for-free.html"))
-# 	# scraper.close()
+def main():
+	print("Starting scraper...")
+	scraper = Scraper()
+	query = "the matrix"
+	query = "https://gomovies-online.cam/all-films-2"
+	query = input("Enter search query:\n> ")
+	print(json.dumps(scraper.search(query), indent=4))
+	scraper.close()
 
 
-# if __name__ == "__main__":
-# 	main()
+if __name__ == "__main__":
+	main()

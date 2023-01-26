@@ -1,39 +1,31 @@
-// document.getElementById("range-input").oninput = function() {
-// 	var value = (this.value-this.min)/(this.max-this.min)*100;
-// 	this.style.background = "linear-gradient(to right, #82CFD0 0%, #82CFD0 ' + value + '%, #fff ' + value + '%, white 100%)";
-// };
-
-// function decodeJwtResponse(response) {
-// 	const jwt = response.split(".")[1];
-// 	const decodedJwtJsonData = window.atob(jwt);
-// 	const decodedJwtData = JSON.parse(decodedJwtJsonData);
-// 	return decodedJwtData;
-// }
-
-// function handleCredentialResponse(response) {
-// 	console.log(response);
-// 	const user = decodeJwtResponse(response.credential);
-// 	console.log(user);
-// 	// Play loading animation
-// 	response = httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/users/login?token="+ response.credential, loggedIn);
-// }
-
-// function loggedIn(message) {
-// 	closeLoginModal();
-// 	alert(message);
-// }
-var form = document.getElementById("input-section");
-var submit = document.getElementById("submit-button-id");
-form.addEventListener("submit", async function(e) {
+function submitSearch(query, first_result_only=false) {
 	loadingWheel = document.createElement("div");
 	loadingWheel.setAttribute("class", "preloader");
 	document.body.appendChild(loadingWheel);
 	// button.setAttribute("style", "animation: pulsate-fwd 0.5s ease-in-out both;");
+	console.log("Submitting searchone for: "+ query);
+	if (first_result_only) {
+		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/searchone?query="+ query, handleSearchoneResponse);
+	} else {
+		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/search?query="+ query, handleSearchoneResponse);
+	}
+}
+
+function submitSearchOne(query) {
+	submitSearch(query, first_result_only=true);
+}
+
+var form = document.getElementById("input-section");
+var submit = document.getElementById("submit-button-id");
+form.addEventListener("submit", async function(e) {
 	e.preventDefault();
 	query = document.getElementById("search-term-id").value;
-	console.log("Submitting searchone for: "+ query);
-	httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/searchone?query="+ query, handleSearchoneResponse);
+	submitSearchOne(query);
 });
+
+function handlePopularOnClick() {
+	submitSearch("https://gomovies-online.cam/all-films-2");
+}
 
 resume_video_url = getCookie("video_url");
 if (resume_video_url) {
@@ -43,28 +35,29 @@ if (resume_video_url) {
 }
 
 function handleSearchoneResponse(response) {
-	// console.log(response);
+	// response always contains result data
 	json = JSON.parse(response.responseText);
-	console.log("Submitting getvideo for: "+ json.data.page_url);
+	console.log("Running getvideo for: "+ json.data.page_url);
 	// console.log("handleSearchoneResponse: "+ JSON.stringify(json.data));
 	// console.log(json.data);
 	// console.log(json.data.page_url);
 	// document.getElementById("video-id").poster = json.data.poster_url;
-	httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?video_url="+ json.data.page_url, handleGetvideoResponse);
+	httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
 }
 
 function handleCaptchaResponse(response) {
+	// response contains result data or captcha error
 	json = JSON.parse(response.responseText);
 	console.log(json.message);
 	if (response.status == 200) {
 		overlay = document.getElementsByClassName("overlay")[0];
 		if (overlay) overlay.remove();
-		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?video_url="+ json.video_url, handleGetvideoResponse);
+		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
 	} else if (response.status == 225) {
 		const captchaImage = json.data;
-		const video_url = json.video_url;
+		const page_url = json.page_url;
 		console.log("HTTP response status code: "+ response.status +"\n"+ json.message);
-		captchaPopUp(captchaImage, video_url);
+		captchaPopUp(captchaImage, page_url);
 	}
 }
 
@@ -73,6 +66,7 @@ function showVideoPlayer() {
 }
 
 function handleGetvideoResponse(response) {
+	// response contains the direct video url or captcha error
 	preloader = document.getElementsByClassName("preloader")[0];
 	if (preloader) preloader.remove();
 
@@ -87,9 +81,9 @@ function handleGetvideoResponse(response) {
 		showVideoPlayer();
 	} else if (response.status == 225) {
 		const captchaImage = json.data;
-		const video_url = json.video_url;
+		const page_url = json.page_url;
 		console.log("HTTP response status code: "+ response.status +"\n"+ json.message);
-		captchaPopUp(captchaImage, video_url);
+		captchaPopUp(captchaImage, page_url);
 	}
 }
 
