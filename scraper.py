@@ -297,6 +297,9 @@ class Scraper(Find_Captcha):
 	def searchone(self, query):
 		return self.search(query, top_result_only=True)[0]
 
+	def popular(self):
+		return self.search("https://gomovies-online.cam/all-films-2")
+
 	def search(self, search_term, top_result_only=False):
 		# https://gomovies-online.cam/watch-tv-show/mr-robot-season-4/cYqlqU9U/t5f85jpg/h2586jt3-online-for-free.html
 		if search_term.startswith("https://gomovies-online.cam/"):
