@@ -11,15 +11,16 @@
 # py version        : 3.11.0 (must run on 3.6 or higher)
 #==============================================================================
 # pylint: disable=import-error
-import base64
-import json
-import os
+# import base64
 import sqlite3
+import json
+import time
+import os
 
 import requests
-from flask import Flask, redirect, render_template, request, url_for
 from oauthlib.oauth2 import WebApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InsecureTransportError
+from flask import Flask, redirect, render_template, request, url_for
 from flask_login import (
 	LoginManager,
 	current_user,
@@ -92,7 +93,15 @@ def check_route_access():
 		# User is banned? Return them to the shadow realm
 		if User.get(current_user.id).banned and not request.endpoint.startswith("banned"):
 			return redirect(url_for("banned"))
-		return  # Access granted (logged in + not banned)
+		# User is not part of a group? Send them to the pending page
+		if not any([
+			Group_Membership.get(current_user.id),
+			request.endpoint.startswith("pending"),
+			request.endpoint.startswith("static"),
+			request.endpoint.startswith("banned")
+		]):
+			return redirect(url_for("pending"))
+		return  # Access granted (logged in + not banned + in group)
 	if any([
 		request.endpoint.startswith("static"),
 		request.host_url.startswith("https://127.0.0.1:9000/"),
@@ -200,29 +209,37 @@ def banned():
 @app.route("/api/v1/search/<query>", methods=["GET"])
 @app.route("/api/v1/search", methods=["GET"])
 def search(query=None):
+	start = time.time()
 	query = request.args.get("query", query)
 	# print(query)
 	if query is None:
+		print(f"Time taken: {round(time.time() - start, 2)}s.")
 		return {"message": "No query provided"}, 400
 	data = scraper.search(query)
 	# data = f"Search for '{query}'"
 
 	if data == 404:
+		print(f"Time taken: {round(time.time() - start, 2)}s.")
 		return {"message": "No results found"}, 404
+	print(f"Time taken: {round(time.time() - start, 2)}s.")
 	return {"message": "OK", "data": data}, 200
 
 @app.route("/api/v1/searchone/<query>", methods=["GET"])
 @app.route("/api/v1/searchone", methods=["GET"])
 def searchone(query=None):
+	start = time.time()
 	query = request.args.get("query", query)
 	# print(query)
 	if query is None:
+		print(f"Time taken: {round(time.time() - start, 2)}s.")
 		return {"message": "No query provided"}, 400
 	data = scraper.searchone(query)
 	# data = f"Search for '{query}'"
 
 	if data == 404:
+		print(f"Time taken: {round(time.time() - start, 2)}s.")
 		return {"message": "No results found"}, 404
+	print(f"Time taken: {round(time.time() - start, 2)}s.")
 	return {"message": "OK", "data": data}, 200
 
 @app.route("/api/v1/getvideo/<page_url>", methods=["GET"])
@@ -264,9 +281,24 @@ def captcha():
 @app.route("/api/v1/download", methods=["POST"])
 @login_required
 def download(url, result=None):
+	page_url = None
+	if url.startswith("https://gomovies-online"):
+		page_url = request.args.get("url", url)
+	# url is page_url or direct link
 	result = request.args.get("result", result)
+	# url is page_url? get direct link
 	if result is None:
-		result = scraper.find_data_from_url(url)
+		if page_url:
+			print("\tWARNING: No result provided, getting data from page_url...")
+			result = scraper.find_data_from_url(page_url)
+			url = scraper.get_video(page_url)
+		else:
+			print("\tERROR: No result provided for direct download link.")
+			return {"message": "No result provided for direct download link"}, 400
+	else:
+		if page_url:
+			url = scraper.get_video(page_url)
+
 	filename = "~/Desktop/movie.mp4"  # TODO: Use the propper filename instead
 	download_engine.queue.append({"url": url, "filename": filename})
 	print("Download queued...")
