@@ -1,0 +1,84 @@
+/**
+ * ----------------------------------------
+ * result card styling
+ * ----------------------------------------
+ */
+#results-section {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	/*padding-left: 100px;
+	padding-right: 100px;*/
+	padding-left: 4.4%;
+	padding-right: 4.4%;
+	margin-top: 115px;
+}
+
+.search-result {
+	position: relative;
+	width: 200px;
+	min-width: 200px;
+	height: 450px;
+	background-color: var(--result-card-background-color);
+	border: 1px solid #808080;
+	border-radius: 12px;
+	margin: 3px;
+	margin-bottom: 12px;
+	transition: 0.2s;
+}
+
+.search-result:hover {
+	transform: scale(1.05);
+}
+
+.search-result > img {
+	aspect-ratio: 2 / 3;
+}
+
+.result-thumbnail {
+	/*the top left/right corners will match the card rounding*/
+	border-radius: inherit;
+	border-bottom-right-radius: 0;
+	border-bottom-left-radius: 0;
+	border-bottom: inherit;
+	width: 100%;
+	cursor: pointer; /*clickable*/
+}
+
+.result-title {
+	position: relative;
+	text-align: center;
+	bottom: 2.5%;
+	/*margin-bottom: 2000px;*/
+	font-family: "Open Sans", sans-serif;
+	margin: 16px;
+}
+
+.label {
+	position: absolute;
+	text-align: center;
+	/*bottom: 0px;*/
+	margin: 12px;
+	color: var(--body-text-color);
+	padding: 3px;
+	border-radius: 80vw;
+	font-family: LexendBold;
+	margin-top: 0;
+	margin-bottom: 2px;
+	left: 0;
+}
+
+.result-year {
+	bottom: 68px;
+	background-color: rgba(49, 130, 206, 0.6);
+}
+
+.result-imdb {
+	bottom: 39px;
+	background-color: rgba(229, 62, 62, 0.8);
+}
+
+.result-duration {
+	bottom: 10px;
+	background-color: rgba(0, 181, 216, 0.6);
+}

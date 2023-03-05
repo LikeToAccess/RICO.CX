@@ -10,6 +10,8 @@
 		--primary-color: #FFF;
 		--secondary-color: #2289FF;
 		--background-color: #EFEFEF;
+		--footer-background-color: #FFF;
+		--table-header-background-color: #C2C4D5;
 	}
 }
 
@@ -25,6 +27,8 @@
 		--primary-color: #A5A5A5;
 		--secondary-color: #3F3F3F;
 		--background-color: #292929;
+		--footer-background-color: #0C0C0C;
+		--table-header-background-color: #EEE;
 	}
 }
 

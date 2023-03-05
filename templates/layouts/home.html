@@ -6,15 +6,11 @@
 	<title>{% block title %}{% endblock %}</title>
 
 	<link rel="stylesheet" type="text/css" href="/static/css/style.css">
-	<link rel="stylesheet" type="text/css" href="/static/css/video-player.css">
 	<link rel="stylesheet" type="text/css" href="/static/css/animation.css">
-	<link rel="stylesheet" type="text/css" href="/static/css/font-awesome-6.2.1.min.css">
-	<link rel="stylesheet" type="text/css" href="/static/css/material-symbols-rounded.css">
+	<link rel="stylesheet" type="text/css" href="/static/css/cards.css">
 	<!-- <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.1/css/all.min.css"> -->
 	<!-- <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"> -->
-	<link rel="stylesheet" type="text/css" href="/static/css/material-icons.css">
 	<script src="/static/js/script.js" defer></script>
-	<script src="/static/js/video-player.js" type="text/javascript" defer></script>
 	<script src="/static/js/settings.js" type="text/javascript"></script>
 	<link rel="shortcut icon" type="image/png" href="/static/ico/favicon.png"/>
 </head>
@@ -26,96 +22,35 @@
 <main>
 	<div class="search-container">
 		<form id="input-section" autocomplete="off">
-			<input type="text" id="search-term-id">
+			<input type="text" required id="search-term-id">
 			<input type="submit" value="Submit" id="submit-button-id">
-			<button id="pop-button-id" onclick="handlePopularOnClick()">Popular</button>
 			<!-- <button type="submit" value="Popular" id="pop-button-id"> -->
 		</form>
+		<button id="pop-button-id" onclick="handlePopularOnClick()">Popular</button>
 	</div>
 	<div style="margin: 85px;"></div>
 
-	<div class="video-player">
-	{% if video_url %}
-		<div class="container">
-	{% else %}
-		<div class="container" hidden>
-	{% endif %}
-		<div class="wrapper">
-			<div class="video-timeline">
-				<div class="progress-area">
-					<span>0:00</span>
-					<div class="progress-bar"></div>
-				</div>
-			</div>
-			<ul class="video-controls">
-				<li class="options left">
-					<button class="volume"><i class="fas fa-volume-high"></i></button>
-					<input type="range" id="range-input">
-					<div class="video-timer">
-						<p class="current-time">0:00</p>
-						<p class="separator"> / </p>
-						<p class="video-duration">0:00</p>
-					</div>
-				</li>
-				<li class="options center">
-					<button class="skip-backward"><i class="fas fa-backward"></i></button>
-					<button class="play-pause"><i class="fas fa-play"></i></button>
-					<button class="skip-forward"><i class="fas fa-forward"></i></button>
-				</li>
-				<li class="options right">
-					<div class="settings-content">
-						<button class="playback-settings"><i class="fas fa-gear"></i></button>
-						<ul class="settings-options">
-							<li>2160p</li>
-							<li>1440p</li>
-							<li class="active">1080p</li>
-							<li>720p</li>
-							<li>480p</li>
-							<li>360p</li>
-						</ul>	
-					</div>
-					<button class="picture-in-picture">
-						<span class="material-symbols-rounded">picture_in_picture_alt</span>
-					</button>
-					<button class="fullscreen"><i class="fas fa-expand"></i></button>
-				</li>
-			</ul>
+	{% if user.is_authenticated %}
+	<div id="results-section">
+	{% for i in range(4) %}
+		<div class="search-result">
+			<img id="-1" src="/static/img/demo-thumbnail.jpg" class="result-thumbnail" onclick="onItemClick('DATA');">
+			<p class="result-title">Flushed Away</p>
+			<p class="result-year label"> 2006 </p>
+			<p class="result-imdb label"> IMDb: 9.7 </p>
+			<p class="result-duration label"> 85 min </p>
 		</div>
-		{% if user.is_authenticated %}
-			<video id="video-id" preload="metadata" src="{{ video_url }}"></video>
-		{% else %}
-			<!-- <video id="video-id" preload="metadata" autoplay muted loop src="/static/video/loading.mp4"></video> -->
-		{% endif %}
+	{% endfor %}
 	</div>
-	</div>
+	{% endif %}
+
+	{# {% include "includes/video-player.html" %} #}
 
 	{% if not user.is_authenticated %}
-		<div class="overlay" id="login-modal">
-			<div id="login-container">
-				<p>Login</p>
-				<div class="login-form">
-					<a class="button" href="/login">Google Login</a>
-				</div>
-				<!-- <div class="g_id_signin"
-					 data-type="standard"
-					 data-shape="rectangular"
-					 data-theme="filled_black"
-					 data-text="signin_with"
-					 data-size="large"
-					 data-logo_alignment="left">
-				</div> -->
-			</div>
-		</div>
+		{% include "includes/login.html" %}
 	{% endif %}
 
-	<div style="margin: 10px;">
-		{% if not group %}
-			<p>You are viewing this page without access. Check account status <a href="/pending">here</a>.</p>
-			<br>
-		{% endif %}
-		{% include "includes/account.html" %}
-		<!-- {#% block content %}{% endblock %#} -->
-	</div>
+	{% include "includes/welcome-info.html" %}
 </main>
 {% include "includes/footer.html" %}
 </body>

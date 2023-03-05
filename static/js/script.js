@@ -1,13 +1,12 @@
 function submitSearch(query, first_result_only=false) {
-	loadingWheel = document.createElement("div");
-	loadingWheel.setAttribute("class", "preloader");
-	document.body.appendChild(loadingWheel);
+	createPreloader();
 	// button.setAttribute("style", "animation: pulsate-fwd 0.5s ease-in-out both;");
-	console.log("Submitting searchone for: "+ query);
 	if (first_result_only) {
+		console.log("Submitting searchone for: "+ query);
 		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/searchone?query="+ query, handleSearchoneResponse);
 	} else {
-		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/search?query="+ query, handleSearchoneResponse);
+		console.log("Submitting search for: "+ query);
+		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/search?query="+ query, handleSearchResponse);
 	}
 }
 
@@ -17,32 +16,64 @@ function submitSearchOne(query) {
 
 var form = document.getElementById("input-section");
 var submit = document.getElementById("submit-button-id");
-form.addEventListener("submit", async function(e) {
-	e.preventDefault();
-	query = document.getElementById("search-term-id").value;
-	submitSearchOne(query);
-});
+if (form) {
+	form.addEventListener("submit", async function(e) {
+		e.preventDefault();
+		query = document.getElementById("search-term-id").value;
+		submitSearchOne(query);
+	});
+}
 
 function handlePopularOnClick() {
 	submitSearch("https://gomovies-online.cam/all-films-2");
 }
 
-resume_video_url = getCookie("video_url");
-if (resume_video_url) {
-	console.log("Resuming video from cookie");
-	document.getElementById("video-id").src = resume_video_url;
-	showVideoPlayer();
+var video_id = document.getElementById("video-id");
+if (video_id) {
+	resume_video_url = getCookie("video_url");
+	if (resume_video_url) {
+		console.log("Resuming video from cookie");
+		video_id.src = resume_video_url;
+		showVideoPlayer();
+	}
+}
+
+function createPreloader() {
+	loadingWheel = document.createElement("div");
+	loadingWheel.setAttribute("class", "preloader");
+	document.body.appendChild(loadingWheel);
+}
+
+function removePreloader() {
+	preloader = document.getElementsByClassName("preloader")[0];
+	if (preloader) preloader.remove();
 }
 
 function handleSearchoneResponse(response) {
 	// response always contains result data
 	json = JSON.parse(response.responseText);
-	console.log("Running getvideo for: "+ json.data.page_url);
 	// console.log("handleSearchoneResponse: "+ JSON.stringify(json.data));
 	// console.log(json.data);
 	// console.log(json.data.page_url);
 	// document.getElementById("video-id").poster = json.data.poster_url;
-	httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
+	if (!video_id) return removePreloader();
+	console.log("Running getvideo for: "+ json.data.page_url);
+	httpGetAsync(
+		API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url,
+		handleGetvideoResponse
+	);
+}
+
+function handleSearchResponse(response) {
+	// response always contains result data
+	json = JSON.parse(response.responseText);
+	// console.log("Running getvideo for: "+ json.data.page_url);
+	// console.log("handleSearchoneResponse: "+ JSON.stringify(json.data));
+	console.log(json.data);
+	// console.log(json.data.page_url);
+	// document.getElementById("video-id").poster = json.data.poster_url;
+	// httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
+	removePreloader();
 }
 
 function handleCaptchaResponse(response) {
@@ -53,32 +84,6 @@ function handleCaptchaResponse(response) {
 		overlay = document.getElementsByClassName("overlay")[0];
 		if (overlay) overlay.remove();
 		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
-	} else if (response.status == 225) {
-		const captchaImage = json.data;
-		const page_url = json.page_url;
-		console.log("HTTP response status code: "+ response.status +"\n"+ json.message);
-		captchaPopUp(captchaImage, page_url);
-	}
-}
-
-function showVideoPlayer() {
-	document.getElementsByClassName("container")[0].removeAttribute("hidden");
-}
-
-function handleGetvideoResponse(response) {
-	// response contains the direct video url or captcha error
-	preloader = document.getElementsByClassName("preloader")[0];
-	if (preloader) preloader.remove();
-
-	json = JSON.parse(response.responseText);
-	console.log(json);
-	if (response.status == 200) {
-		// Play video
-		console.log("Playing video");
-		expires = json.data.split("~exp=")[1].split("~acl=/*~hmac=")[0];
-		setCookie("video_url", json.data, expires);
-		document.getElementById("video-id").src = json.data;
-		showVideoPlayer();
 	} else if (response.status == 225) {
 		const captchaImage = json.data;
 		const page_url = json.page_url;

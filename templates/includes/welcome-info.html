@@ -1,0 +1,10 @@
+<link rel="stylesheet" type="text/css" href="/static/css/welcome-info.css">
+
+<div style="margin: 10px;" class="welcome-info">
+	{% if not group %}
+		<p>You are viewing this page without access. Check account status <a href="/pending">here</a>.</p>
+		<br>
+	{% endif %}
+	{% include "includes/account.html" %}
+	<!-- {#% block content %}{% endblock %#} -->
+</div>
