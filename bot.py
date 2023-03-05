@@ -33,6 +33,7 @@ bot = commands.Bot(
 			"pls ",
 			"Pls ",
 			"PLS ",
+			"!"
 		),
 		intents=intents,
 		case_insensitive=True
@@ -99,11 +100,40 @@ async def download(ctx, *args):
 	url = scraper.get_video(page_url)
 	if url == 225:
 		await message.edit(content="Captcha!")
+		captcha = discord.File("captcha.png")
+		await ctx.send(content="Please solve using the solve command.", file=captcha)
 		# TODO: Add captcha solving
 		return
 	await message.edit(content="Starting download...")
 	threaded_download(url, data)
 	await message.edit(content="Download started.")
+
+@bot.command(name="solve", aliases=["captcha"], help="Solves a captcha.")
+async def solve(ctx, solution=None):
+	if solution is None:
+		captcha = discord.File("captcha.png")
+		await ctx.send(content="Please solve using the solve command.", file=captcha)
+		return
+
+	solution = solution.upper()
+	autocorrect_dictionary = {
+		"0": "O",
+		"1": "I",
+		"2": "Z",
+		"3": "E",
+		"4": "A",
+		"5": "S",
+		"6": "G",
+		"7": "T",
+		"8": "B",
+		"9": "G",
+		" ": ""
+	}
+	solution = "".join([autocorrect_dictionary.get(c, c) for c in solution])
+	print(f"DEBUG (solution): {solution}")
+	if not solution.isalpha() or len(solution) != 7:
+		await ctx.reply("Invalid solution. Please try again.", mention_author=False)
+		return
 
 @bot.command(name="react", help="Post a reaction.")
 async def react(ctx):
