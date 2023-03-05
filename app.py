@@ -99,8 +99,7 @@ def check_route_access():
 			request.endpoint.startswith("pending"),
 			request.endpoint.startswith("static"),
 			request.endpoint.startswith("banned"),
-			request.endpoint.startswith("logout"),
-			request.endpoint.startswith("login")
+			request.endpoint.startswith("logout")
 		]):
 			return redirect(url_for("pending"))
 		return  # Access granted (logged in + not banned + in group)
