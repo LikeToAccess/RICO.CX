@@ -98,7 +98,9 @@ def check_route_access():
 			Group_Membership.get(current_user.id),
 			request.endpoint.startswith("pending"),
 			request.endpoint.startswith("static"),
-			request.endpoint.startswith("banned")
+			request.endpoint.startswith("banned"),
+			request.endpoint.startswith("logout"),
+			request.endpoint.startswith("login")
 		]):
 			return redirect(url_for("pending"))
 		return  # Access granted (logged in + not banned + in group)
