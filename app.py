@@ -11,7 +11,6 @@
 # py version        : 3.11.0 (must run on 3.6 or higher)
 #==============================================================================
 # pylint: disable=import-error
-# import base64
 import sqlite3
 import json
 import time
@@ -102,13 +101,13 @@ def check_route_access():
 			request.endpoint.startswith("logout")
 		]):
 			return redirect(url_for("pending"))
-		return  # Access granted (logged in + not banned + in group)
+		return None # Access granted (logged in + not banned + in group)
 	if any([
 		request.endpoint.startswith("static"),
 		request.host_url.startswith("https://127.0.0.1:9000/"),
 		getattr(app.view_functions[request.endpoint], "is_public", False)
 	]):
-		return  # Access granted (public or static route or localhost)
+		return None # Access granted (public or static route or localhost)
 	return redirect(url_for("login"))  # Send to login page (not logged in)
 
 @app.route("/")
@@ -125,6 +124,23 @@ def index(video_url=None):
 		user=current_user,
 		group=group,
 		video_url=video_url
+	)
+
+@app.route("/search")
+@app.route("/search/<query>")
+def search_results(query=None):
+	group = Group_Membership.get(current_user.id) if current_user.is_authenticated else None
+	if not query.strip():
+		results = []
+	else:
+		results = scraper.search(query)
+
+	return render_template(
+		"pages/search.html",
+		user=current_user,
+		group=group,
+		query=query,
+		results=results
 	)
 
 # Handle delete, ban, and change_role POST requests to /admin
@@ -278,30 +294,26 @@ def captcha():
 	return {"message": "CAPTCHA solved", "page_url": page_url}, 200
 	# return {"message": "OK", "data": data}, 200
 
-@app.route("/api/v1/download/<url>", methods=["POST"])
+@app.route("/api/v1/download/<url>/<result>", methods=["POST"])
 @app.route("/api/v1/download", methods=["POST"])
 @login_required
-def download(url, result=None):
-	page_url = None
-	if url.startswith("https://gomovies-online"):
-		page_url = request.args.get("url", url)
-	# url is page_url or direct link
-	result = request.args.get("result", result)
-	# url is page_url? get direct link
-	if result is None:
-		if page_url:
-			print("\tWARNING: No result provided, getting data from page_url...")
-			result = scraper.find_data_from_url(page_url)
-			url = scraper.get_video(page_url)
-		else:
-			print("\tERROR: No result provided for direct download link.")
-			return {"message": "No result provided for direct download link"}, 400
-	else:
-		if page_url:
-			url = scraper.get_video(page_url)
+def download(url=None, result=None):
+	url    = request.args.get("url")
+	result = request.args.get("result")
 
-	filename = "~/Desktop/movie.mp4"  # TODO: Use the propper filename instead
-	download_engine.queue.append({"url": url, "filename": filename})
+	if result is not None:
+		result = json.loads(requests.utils.unquote(result))
+		print(f"DEBUG: Result: {result}")
+	elif url is not None:
+		print("\tWARNING: No result provided, getting data from page_url...")
+		result = scraper.find_data_from_url(url)
+	else:
+		print("\tERROR: No result provided for direct download link.")
+		return {"message": "No result provided for direct download link"}, 400
+	video_url = scraper.get_video(result["page_url"])
+
+	filename = "/Users/ian/Desktop/movie.mp4"  # TODO: Use the propper filename instead
+	download_engine.queue.append({"url": video_url, "filename": filename})
 	print("Download queued...")
 	print(f"DEBUG: {download_engine.queue}")
 	for i in range(len(download_engine.queue)):
@@ -309,7 +321,8 @@ def download(url, result=None):
 
 	print("DEBUG: Download finished!")
 	# Remove the item from the queue after the download is finished
-	download_engine.queue.remove({"url": url, "filename": filename})
+	# download_engine.queue.remove({"url": url, "filename": filename})
+	return {"message": "Created", "result": result}, 201
 
 @app.route("/login")
 @public_route
