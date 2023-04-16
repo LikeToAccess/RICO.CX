@@ -33,6 +33,19 @@ regions = read_json_file("country_codes.json")
 # def filter_bad_characters(data, ):
 # 	return re.sub(bad_characters, "", data).encode("ascii", "ignore").decode()
 
+def convert_imdb_to_float(string):
+	# Check if the string starts with "IMDb: " and strip it out
+	if string.startswith("IMDb: "):
+		string = string[6:]
+
+	# Check if the remaining string can be converted to a float or int
+	if re.match(r'^\d+\.\d+$', string):
+		return float(string)
+	elif re.match(r'^\d+$', string):
+		return float(string)
+	else:
+		return string
+
 def contains_only_letters(data):
 	matches = re.findall(r"[^a-zA-Z]+", data)
 	return not bool(matches)
@@ -227,7 +240,7 @@ class Format:
 
 		return file_path
 
-	def format_file_name(self):
+	def format_filename(self):
 		if TMDB_API_KEY:
 			print("Waiting for TMDb lookup...")
 			t1_start = perf_counter()
@@ -246,15 +259,11 @@ class Format:
 		return file_path
 
 	def run(self):
-		print(f"DEBUG: {self.format_file_name()}")
+		print(f"DEBUG: {self.format_filename()}")
 
 
 def main():
-	file_name = Format('{"title":"Star Wars: Episode IX - The Rise of Skywalker","poster_url":"https://static.gomovies-online.cam/dist/img/C97to1aFchTRotSn63m3yc6k-oA7ou6anY3ruU8Lf2WevlTvJjQks5i_z5fTnadgcYV7z9aVPQcKUVsAxMzkDleaTjfFbze08mdub0ZTXuq3y0XxXiUGmfEQFgfeMfN-.jpg","url":"https://gomovies-online.cam/watch-film/star-wars-episode-ix-the-rise-of-skywalker/dz7sghqt","data":{"title":"Star Wars: Episode IX - The Rise of Skywalker","release_year":"2019","imdb_score":"IMDb: 6.5","duration":"141 min","release_country":"United States","genre":"Action, Adventure, Fantasy","description_preview":"An action movie that presents another story of the epic films series, Star Wars. This film continues with the events of The Last Jedi (2017). The...","key":"0","quality_tag":"HD","user_rating":"3.138890"}}')
-	# file_name = Format('{"title":"The Lord of the Rings: The Rings of Power - Season 1","poster_url":"https://static.gomovies-online.cam/dist/img/_6CcL186P_Wy8TqINYCpv1vQlGZwG8GXTBxUUaWrejiI-K0wsXfLv1anrsfCNZa1E2PlY5giii9QK0441PQ_TZoOBqLiP7OR28gd2UUtKqBXSfHdwrRMYFPAkdQIIuww.jpg","url":"https://gomovies-online.cam/watch-tv-show/the-lord-of-the-rings-the-rings-of-power-season-1/Dok6Ozoc","data":{"title":"The Lord of the Rings: The Rings of Power - Season 1","release_year":"2022","imdb_score":"IMDb: 6.9","duration":"90 min","release_country":"United States","genre":"Drama, Action, Adventure","description_preview":"Epic drama set thousands of years before the events of J.R.R. Tolkien\'s \'The Hobbit\' and \'The Lord of the Rings\' follows an ensemble cast of...","key":"0","quality_tag":"HD","user_rating":"4.000000"}}')
-	# file_name = Format('{"title":"John Adams - Season 1","poster_url":"https://static.gomovies-online.cam/dist/img/ZxbUx78gfmcmfZJK6HUKzq6Uc1um2ts3wz9XlD3a-yUgMoK1AaNmYqRAXBeuPJjXk_nZhodkYTIN9Wv_USV7ypr2MWUUsZKw0XaGOoJak-02pMsapG3mGeBQuKxpZnPQ.jpg","url":"https://gomovies-online.cam/watch-tv-show/john-adams-season-1/amA2Zf8B","data":{"title":"John Adams - Season 1","release_year":"2008","imdb_score":"IMDb: 8.5","duration":"71 min","release_country":"United States","genre":"Drama, Biography, History","description_preview":"The life of one of the USA\'s Founding Fathers, its second President, and his role in the nation\'s first 50...","key":"0","quality_tag":"HD","user_rating":"0.000000"}}')
-	# file_name = Format('{"title":"House of the Dragon - Season 1 Episode 04: King of the Narrow Sea","poster_url":"https://static.gomovies-online.cam/dist/img/JwcIcm8LmF3N-dxSG-TYdejY60yMncaAQNO_jiedtvGAb5Fox1e_gcAWDJWuCAEYBTQz9hXPyn1ki90-FyAHXRCDimczv6xpDbrT9RO6qEliqnLjBm9-pwQvd4-xwH07.jpg","url":"https://gomovies-online.cam/watch-tv-show/house-of-the-dragon-season-1/1tiQ2oUp/tWUDFo8X/cIECTfeF-online-for-free.html","data":{"title":"House of the Dragon - Season 1 Episode 04: King of the Narrow Sea","release_year":"2022","imdb_score":"8.8","duration":"90 min","release_country":"United States","genre":"Adventure","description_preview":"The story of the House Targaryen set 200 years before the events of Game of Thrones...","quality_tag":"HD","user_rating":"4.71428","key":"0"}}')
-	# file_name = Format(' {"title":"See - Season 3 Episode 04: The Storm","poster_url":"https://static.gomovies-online.cam/dist/img/saFCeEnxbe3Tp-BQbNrk7T0wzjaa3cYl0Qt_604F8aTx-Ll4xl1mqojaOG8aITLVuPrniAS4ewEukHeIzrBQ83lorWm5G4AqYvuBM-EA24zOKNsZgqiT-_-KY2msmN2F.jpg","url":"https://gomovies-online.cam/watch-tv-show/see-season-3/6fFrLVuC/B4Eh4aWC/mlSvSQoN-online-for-free.html","data":{"title":"See - Season 3 Episode 04: The Storm","release_year":"2022","imdb_score":"7.6","duration":"60 min","release_country":"United States","genre":"Drama, Action, Adventure, Fantasy, Sci-Fi","description_preview":"Far in a dystopian future, the human race has lost the sense of sight, and society has had to find new ways to interact, build, hunt, and to survive. All of that is challenged when a set of twins are born with...","quality_tag":"HD","user_rating":"4","key":"0"}}')
+	file_name = Format({'title': 'Flushed Away', 'page_url': 'https://gomovies-online.cam/watch-film/flushed-away/6N8p178f', 'poster_url': 'https://static.gomovies-online.cam/dist/img/UI8PAe7IzXTeCQl4aF9SqFxc5YsWt9wHRD2UgAy3culxFUdWsD5ckp32IfKlMqWNZmsCMpsk2sffXG_NWWAfaWQkhVjoB4hR32MXmEumXW0.jpg', 'data': {'title': 'Flushed Away', 'release_year': '2006', 'imdb_score': 'IMDb: 6.6', 'duration': '85 min', 'release_country': 'United States, United Kingdom', 'genre': 'Comedy, Adventure, Animation', 'description_preview': 'After an ignoble landing in Ratropolis, a pampered rodent\xa0that gets flushed down the toilet from his penthouse apartment\xa0enlists the help of a...', 'key': '0', 'quality_tag': 'HD', 'user_rating': '5.000000'}})
 	file_name.run()
 
 
