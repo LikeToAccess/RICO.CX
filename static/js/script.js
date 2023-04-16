@@ -20,7 +20,7 @@ if (form) {
 	form.addEventListener("submit", async function(e) {
 		e.preventDefault();
 		query = document.getElementById("search-term-id").value;
-		submitSearchOne(query);
+		submitSearch(query);
 	});
 }
 
@@ -74,6 +74,56 @@ function handleSearchResponse(response) {
 	// document.getElementById("video-id").poster = json.data.poster_url;
 	// httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
 	removePreloader();
+	// {% for result in results %}
+	// 	{% set poster   = result["poster_url"]           %}
+	// 	{% set title    = result["title"]                %}
+	// 	{% set year     = result["data"]["release_year"] %}
+	// 	{% set imdb     = result["data"]["imdb_score"]   %}
+	// 	{% set duration = result["data"]["duration"]     %}
+	// 	<div class="search-result">
+	// 		<img id="{{ index }}" src="{{ poster }}" class="result-thumbnail" onclick="onItemClick({{ result }});">
+	// 		<p class="result-title">{{ title }}</p>
+	// 		<p class="result-year label"> {{ year }} </p>
+	// 		<p class="result-imdb label"> {{ imdb }} </p>
+	// 		<p class="result-duration label"> {{ duration }} </p>
+	// 	</div>
+	// {% endfor %}
+	results_section = document.getElementById("results-section");
+	results_section.innerHTML = "";
+	results = json.data;
+	for (let i = 0; i < results.length; i++) {
+		result = results[i];
+		poster   = result.poster_url;
+		title    = result.title;
+		year     = result.data.release_year;
+		imdb     = result.data.imdb_score;
+		duration = result.data.duration;
+		// page_url = result.page_url;
+		search_result = document.createElement("div");
+		search_result.setAttribute("class", "search-result");
+		search_result.setAttribute("id", "id-"+ i);
+		// search_result.setAttribute("data-page-url", page_url);
+		// search_result.setAttribute("onclick", "onItemClick(this);");
+		result = JSON.stringify(result);
+		// console.log("result: "+ result);
+		// console.log(`result: ${encodeURIComponent(result)}`);
+		search_result.innerHTML = `
+			<img src="${poster}" class="result-thumbnail" onclick='httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download?result=${encodeURIComponent(result)}", handleDownloadResponse);'>
+			<p class="result-title">${title}</p>
+			<p class="result-year label"> ${year} </p>
+			<p class="result-imdb label"> IMDb: ${imdb} </p>
+			<p class="result-duration label"> ${duration} </p>
+		`;
+		results_section.appendChild(search_result);
+	}
+}
+
+function onItemClick(result) {
+	httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download/"+ result, handleDownloadResponse);
+}
+
+function handleDownloadResponse(response) {
+	console.log("handleDownloadResponse: "+ response);
 }
 
 function handleCaptchaResponse(response) {
@@ -184,6 +234,7 @@ function httpPostAsync(url, callback, method="POST") {
 			callback(xmlHttp);
 		else if (xmlHttp.readyState == 4 && xmlHttp.status != 200)
 			alert(JSON.parse(xmlHttp.responseText).message);
+			// removePreloader();
 			// callback(xmlHttp);
 	};
 	xmlHttp.open(method, url, true); // true for asynchronous
@@ -192,6 +243,60 @@ function httpPostAsync(url, callback, method="POST") {
 
 function httpGetAsync(url, callback) {
 	httpPostAsync(url, callback, method="GET");
+}
+
+// create a profile dropdown menu
+function createProfileDropdownMenu(profile_pic, profile_name, group_name) {
+	// <div class="dropdown">
+	// 	<button class="dropbtn">Dropdown</button>
+	// 	<div class="dropdown-content">
+	// 		<a href="#">Link 1</a>
+	// 		<a href="#">Link 2</a>
+	// 		<a href="#">Link 3</a>
+	// 	</div>
+	// </div>
+	var profileDropdownMenu = document.createElement("div");
+	var profileDropdownContent = document.createElement("div");
+	var profileDropdownInfo = document.createElement("div");
+	var profileDropdownImg = document.createElement("img");
+	var profileDropdownName = document.createElement("p");
+	var profileDropdownLink1 = document.createElement("a");
+
+	profileDropdownMenu.setAttribute("class", "dropdown");
+	profileDropdownContent.setAttribute("class", "dropdown-content");
+	profileDropdownInfo.setAttribute("class", "profile-dropdown-info");
+	profileDropdownLink1.setAttribute("href", "logout");
+
+	profileDropdownImg.setAttribute("src", profile_pic);
+	profileDropdownName.innerText = profile_name;
+	profileDropdownLink1.innerText = "Logout";
+
+	profileDropdownMenu.appendChild(profileDropdownContent);
+	profileDropdownContent.appendChild(profileDropdownInfo);
+	profileDropdownInfo.appendChild(profileDropdownImg);
+	profileDropdownInfo.appendChild(profileDropdownName);
+	profileDropdownContent.appendChild(profileDropdownLink1);
+	// console.log(group_name);
+	if (["Moderators", "Administrators", "Root"].includes(group_name)) {
+		var profileDropdownLink2 = document.createElement("a");
+		profileDropdownLink2.setAttribute("href", "admin");
+		profileDropdownLink2.innerText = "Admin Portal";
+		profileDropdownContent.appendChild(profileDropdownLink2);
+	}
+
+	return profileDropdownMenu;
+}
+
+function toggleProfileDropdownMenu(profile_pic, profile_name, group_name) {
+	// check if the dropdown does not yet exist and create it
+	if (document.getElementById("profile-dropdown-menu") == null) {
+		var profileDropdownMenu = createProfileDropdownMenu(profile_pic, profile_name, group_name);
+		profileDropdownMenu.setAttribute("id", "profile-dropdown-menu");
+		document.getElementById("profile").appendChild(profileDropdownMenu);
+	}
+	else {
+		document.getElementById("profile-dropdown-menu").remove();
+	}
 }
 
 

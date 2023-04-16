@@ -232,6 +232,71 @@ button#pop-button-id {
 
 /**
  * ----------------------------------------
+ * results
+ * ----------------------------------------
+ */
+#results-section {
+	margin-bottom: 70px;
+}
+
+/**
+ * ----------------------------------------
+ * profile
+ * ----------------------------------------
+ */
+#profile {
+	position: absolute;
+	right: 0;
+	top: 0;
+}
+
+#profile > img {
+	width: 50px;
+	aspect-ratio: 1/1;
+	border-radius: 50%;
+	margin: 20px;
+	cursor: pointer;
+}
+
+#profile-dropdown-menu {
+	position: absolute;
+	right: 20px;
+	top: 70px;
+	background: white;
+	border-radius: 4px;
+	box-shadow: 0 3px 10px rgb(0 0 0 / 0.8);
+	z-index: 100;
+	width: 248px;
+}
+
+#profile-dropdown-menu a {
+	padding: 10px;
+	cursor: pointer;
+	display: block;
+}
+
+#profile-dropdown-menu a:hover {
+	border-radius: 4px;
+	background: var(--off-white);
+}
+
+.profile-dropdown-info {
+	display: flex;
+	align-items: center;
+	color: #000;
+}
+
+.profile-dropdown-info > img {
+	width: 50px;
+	aspect-ratio: 1/1;
+	border-radius: 50%;
+	margin: 10px;
+}
+
+
+
+/**
+ * ----------------------------------------
  * spinner
  * ----------------------------------------
  */

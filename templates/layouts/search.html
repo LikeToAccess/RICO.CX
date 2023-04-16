@@ -33,7 +33,7 @@
 
 	{% if user.is_authenticated %}
 	<div id="results-section">
-	{% for result in results %}
+	<!--{% for result in results %}
 		{% set poster   = result["poster_url"]           %}
 		{% set title    = result["title"]                %}
 		{% set year     = result["data"]["release_year"] %}
@@ -46,7 +46,8 @@
 			<p class="result-imdb label"> {{ imdb }} </p>
 			<p class="result-duration label"> {{ duration }} </p>
 		</div>
-	{% endfor %}
+	{% endfor %}-->
+
 	</div>
 	{% endif %}
 
@@ -56,7 +57,7 @@
 		{% include "includes/login.html" %}
 	{% endif %}
 
-	{% include "includes/welcome-info.html" %}
+	{# {% include "includes/welcome-info.html" %} #}
 </main>
 {% include "includes/footer.html" %}
 </body>
