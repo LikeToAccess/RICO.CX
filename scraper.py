@@ -23,6 +23,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from file import *
 from settings import *
 from find_captcha import Find_Captcha
+from format import convert_imdb_to_float
 
 
 # OS = platform.system()
@@ -37,7 +38,7 @@ class Scraper(Find_Captcha):
 		user_data_dir = os.path.abspath("selenium_data")
 		options.add_argument("--autoplay-policy=no-user-gesture-required")
 		options.add_argument("log-level=3")
-		options.add_argument("--no-sandbox")
+		# options.add_argument("--no-sandbox")
 		options.add_experimental_option("prefs", {"download_restrictions": 3})  # Disable downloads
 		options.add_argument(f"user-data-dir={user_data_dir}")
 		options.add_argument("--ignore-certificate-errors-spki-list")
@@ -159,7 +160,7 @@ class Scraper(Find_Captcha):
 
 		data["title"] = data["title"].text
 		data["release_year"] = data["release_year"].text
-		data["imdb_score"] = data["imdb_score"].text
+		data["imdb_score"] = convert_imdb_to_float(data["imdb_score"].text)
 		data["duration"] = data["duration"].text
 		data["release_country"] = data["release_country"].text
 		data["user_rating"] = data["user_rating"].get_attribute("data-rating")
@@ -210,12 +211,12 @@ class Scraper(Find_Captcha):
 					  self.find_elements_by_xpath("//*[@class='item_cam']") + \
 					  self.find_elements_by_xpath("//*[@class='item_series']") \
 					  if top_result_only < 1 else [
-					  	  self.find_element_by_xpaths(
-					  	  	  "//*[@class='item_hd']",
-					  	  	  "//*[@class='item_sd']",
-					  	  	  "//*[@class='item_cam']",
-					  	  	  "//*[@class='item_series']",
-					  	  )
+						  self.find_element_by_xpaths(
+							  "//*[@class='item_hd']",
+							  "//*[@class='item_sd']",
+							  "//*[@class='item_cam']",
+							  "//*[@class='item_series']",
+						  )
 					  ]
 		except NoSuchElementException:
 			return 404
@@ -266,6 +267,8 @@ class Scraper(Find_Captcha):
 				search_data["description_preview"].strip(". ").rsplit(" ", 1)[0].strip(".") + "...",
 				search_data["quality_tag"].replace("itemAbsolute_", "").upper()
 			)
+
+			search_data["imdb_score"] = convert_imdb_to_float(search_data["imdb_score"])
 
 			if title != search_data["title"]:
 				print("\tWARNING: Titles do not match!")
