@@ -29,11 +29,12 @@ from flask_login import (
 )
 
 import download_engine
-from database import init_db_command
 from user import User
-from group import Group_Membership
+from format import Format
 from scraper import Scraper
 from file import read_image
+from group import Group_Membership
+from database import init_db_command
 from settings import (
 	GOOGLE_CLIENT_ID,
 	GOOGLE_CLIENT_SECRET,
@@ -130,17 +131,17 @@ def index(video_url=None):
 @app.route("/search/<query>")
 def search_results(query=None):
 	group = Group_Membership.get(current_user.id) if current_user.is_authenticated else None
-	if not query.strip():
-		results = []
-	else:
-		results = scraper.search(query)
+	# if not query.strip():
+	# 	results = []
+	# else:
+	# 	results = scraper.search(query)
 
 	return render_template(
 		"pages/search.html",
 		user=current_user,
 		group=group,
 		query=query,
-		results=results
+		# results=results
 	)
 
 # Handle delete, ban, and change_role POST requests to /admin
@@ -298,6 +299,20 @@ def captcha():
 @app.route("/api/v1/download", methods=["POST"])
 @login_required
 def download(url=None, result=None):
+	"""
+	Download a video from a result.
+
+	Args:
+		url (str, optional): The url of the video to download.
+		result (str, optional): The result of the video to download.
+
+	Returns:
+		200: The video is already in queue.
+		201: The video was downloaded successfully.
+		400: No url or result was provided.
+		508: Failed to download the video.
+
+	"""
 	url    = request.args.get("url")
 	result = request.args.get("result")
 
@@ -311,13 +326,28 @@ def download(url=None, result=None):
 		print("\tERROR: No result provided for direct download link.")
 		return {"message": "No result provided for direct download link"}, 400
 	video_url = scraper.get_video(result["page_url"])
+	retry_count = 0
+	while not video_url:
+		video_url = scraper.get_video(result["page_url"])
+		retry_count += 1
+		if retry_count > 5:
+			print("\tERROR: Failed to get video url.")
+			return {"message": "Failed to get video url"}, 508
 
-	filename = "/Users/ian/Desktop/movie.mp4"  # TODO: Use the propper filename instead
+	filename = Format(result).format_filename()
+	# Check if the video is already in the queue
+	if {"url": video_url, "filename": filename} in download_engine.queue:
+		print("DEBUG: Already in queue")
+		return {"message": "Already in queue"}, 200
+
+	# Add the item to the queue
 	download_engine.queue.append({"url": video_url, "filename": filename})
 	print("Download queued...")
 	print(f"DEBUG: {download_engine.queue}")
-	for i in range(len(download_engine.queue)):
-		download_engine.download_file(i)
+	download_engine.download_file(-1)
+	# for i in range(len(download_engine.queue)):
+		# download_engine.download_file(i)
+		# download_engine.queue.pop(i)
 
 	print("DEBUG: Download finished!")
 	# Remove the item from the queue after the download is finished
@@ -345,20 +375,16 @@ def login():
 @public_route
 def callback():
 	try:
-		# Get authorization code Google sent back to you
-		code = request.args.get("code")
-
 		# Find out what URL to hit to get tokens that allow you to ask for
 		# things on behalf of a user
 		google_provider_cfg = get_google_provider_cfg()
-		token_endpoint = google_provider_cfg["token_endpoint"]
 
 		# Prepare and send request to get tokens! Yay tokens!
 		token_url, headers, body = client.prepare_token_request(
-			token_endpoint,
+			google_provider_cfg["token_endpoint"],
 			authorization_response=request.url,
 			redirect_url=request.base_url,
-			code=code,
+			code=request.args.get("code"),
 		)
 		token_response = requests.post(
 			token_url,

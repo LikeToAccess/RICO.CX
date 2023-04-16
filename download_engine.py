@@ -110,6 +110,9 @@ def download_file(position: int, retry_count: int = 0) -> None:
 	"""
 	# Establish connection to header of file
 	url = queue[position]["url"]
+	filename = queue[position]["filename"]
+	# queue.remove({"url": url, "filename": filename})
+	# queue.pop(position)
 	request = requests.head(url, timeout=120)
 	if request.status_code == 404:
 		if retry_count < max_retries:
@@ -125,7 +128,6 @@ def download_file(position: int, retry_count: int = 0) -> None:
 	# Get filesize of remote and local file
 	remote_file_size = int(request.headers.get("content-length", 0))
 	# filename = url.split("?name=")[1].split("&token=ip=")[0] + ".mp4"
-	filename = queue[position]["filename"]
 
 	if os.path.exists(filename):
 		local_file_size = os.path.getsize(filename)
