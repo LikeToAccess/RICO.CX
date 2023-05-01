@@ -118,12 +118,12 @@ def download_file(position: int, retry_count: int = 0) -> None:
 		if retry_count < max_retries:
 			print(f"\tWARNING: File not found on server, status code {request.status_code}, retrying ({retry_count + 1}/{max_retries})...")
 			downloader(position, retry_count=retry_count + 1)
-			return
+			return False
 		print("\tERROR: File not found, skipping...")
-		return
+		return False
 	if request.status_code not in {200, 206}:  # 206 is partial content
 		print(f"\tERROR: Failed to establish connection, status code {request.status_code}.")
-		return
+		return False
 
 	# Get filesize of remote and local file
 	remote_file_size = int(request.headers.get("content-length", 0))
@@ -136,17 +136,17 @@ def download_file(position: int, retry_count: int = 0) -> None:
 			print("\tWARNING: Local file is larger than remote file, deleting local file and starting download from scratch...")
 			os.remove(filename)
 			downloader(position)
-			return
+			return True
 		if remote_file_size != local_file_size:
 			print(f"\tFile is incomplete, resuming download... ({local_file_size} of {remote_file_size} bytes downloaded)")
 			downloader(position, local_file_size)
-			return
+			return True
 		print("\tFile is complete, download skipped.")
 		queue.remove({"url": url, "filename": filename})
-	else:
-		print("\tFile does not yet exist, starting download...")
-		downloader(position)
-		return
+		return True
+	print("\tFile does not yet exist, starting download...")
+	downloader(position)
+	return True
 
 
 def main():
