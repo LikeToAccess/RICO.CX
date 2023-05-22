@@ -19,9 +19,9 @@ HEADLESS = True
 
 # Sets the IP/Domain Name and port to bind the API to, the API will only be
 # accessable from whatever this is set to.
-# The default value is "0.0.0.0" (for localhost) and 8080.
+# The default value is "0.0.0.0" (for localhost) and 5000.
 HOST = "0.0.0.0"
-PORT = 8080
+PORT = 5000
 
 # Enables API serving via Flask instead of Waitress. Also disables downloading
 # full media and skips verification checks.
