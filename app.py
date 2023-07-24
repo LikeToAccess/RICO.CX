@@ -8,7 +8,7 @@
 # usage             : python app.py
 # notes             :
 # license           : MIT
-# py version        : 3.11.0 (must run on 3.6 or higher)
+# py version        : 3.11.0 (must run on 3.10 or higher)
 #==============================================================================
 # pylint: disable=import-error
 import sqlite3
@@ -17,6 +17,7 @@ import time
 import os
 
 import requests
+from cachetools import TTLCache
 from oauthlib.oauth2 import WebApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InsecureTransportError
 from flask import Flask, redirect, render_template, request, url_for
@@ -28,12 +29,13 @@ from flask_login import (
 	logout_user
 )
 
-import download_engine
+from download_engine import DownloadEngine
 from user import User
 from format import Format
 from scraper import Scraper
 from file import read_image
-from group import Group_Membership
+# from download import Download
+from group import GroupMembership
 from database import init_db_command
 from settings import (
 	GOOGLE_CLIENT_ID,
@@ -48,6 +50,8 @@ app.secret_key = os.urandom(24)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
+server_init_time = time.time()
+
 # Naive database setup
 try:
 	init_db_command()
@@ -61,6 +65,9 @@ client = WebApplicationClient(GOOGLE_CLIENT_ID)
 
 # Web scraping setup
 scraper = Scraper()
+
+# Cache setup
+cache = TTLCache(maxsize=100, ttl=86400)  # 24 hours
 
 
 @login_manager.unauthorized_handler
@@ -95,7 +102,7 @@ def check_route_access():
 			return redirect(url_for("banned"))
 		# User is not part of a group? Send them to the pending page
 		if not any([
-			Group_Membership.get(current_user.id),
+			GroupMembership.get(current_user.id),
 			request.endpoint.startswith("pending"),
 			request.endpoint.startswith("static"),
 			request.endpoint.startswith("banned"),
@@ -103,6 +110,9 @@ def check_route_access():
 		]):
 			return redirect(url_for("pending"))
 		return None # Access granted (logged in + not banned + in group)
+	if request.endpoint is None:
+		# Remove trailing slash
+		return redirect(request.url.rstrip("/"))
 	if any([
 		request.endpoint.startswith("static"),
 		request.host_url.startswith("https://127.0.0.1:9000/"),
@@ -118,7 +128,7 @@ def index(video_url=None):
 	# print(request.args.get("video_url"))
 	# print(video_url)
 	# print(vars(current_user))
-	group = Group_Membership.get(current_user.id) if current_user.is_authenticated else None
+	group = GroupMembership.get(current_user.id) if current_user.is_authenticated else None
 
 	return render_template(
 		"pages/home.html",
@@ -130,11 +140,12 @@ def index(video_url=None):
 @app.route("/search")
 @app.route("/search/<query>")
 def search_results(query=None):
-	group = Group_Membership.get(current_user.id) if current_user.is_authenticated else None
+	group = GroupMembership.get(current_user.id) if current_user.is_authenticated else None
 	# if not query.strip():
 	# 	results = []
 	# else:
 	# 	results = scraper.search(query)
+	# result = cache.get(query)
 
 	return render_template(
 		"pages/search.html",
@@ -148,8 +159,8 @@ def search_results(query=None):
 @app.route("/admin", methods=["POST"])
 @login_required
 def admin_panel_managment():
-	print(Group_Membership.get(current_user.id).role)
-	if Group_Membership.get(current_user.id).role not in ["Administrators", "Root"]:
+	print(GroupMembership.get(current_user.id).role)
+	if GroupMembership.get(current_user.id).role not in ["Administrators", "Root"]:
 		return "You are not authorized to access this page.", 403
 
 	# Get the user to modify
@@ -176,13 +187,13 @@ def admin_panel_managment():
 @app.route("/admin")
 @login_required
 def admin():
-	group = Group_Membership.get(current_user.id)
+	group = GroupMembership.get(current_user.id)
 
 	if not group and group.role in ["Administrators", "Root"]:
 		return "You must be an admin to access this content.", 403
 
 	users = User.get_all()
-	groups = Group_Membership.get_all()
+	groups = GroupMembership.get_all()
 
 	return render_template(
 		"pages/admin.html",
@@ -195,7 +206,7 @@ def pending():
 	if not current_user.is_authenticated:
 		return redirect(url_for("login"))
 
-	group = Group_Membership.get(current_user.id)
+	group = GroupMembership.get(current_user.id)
 	user = User.get(current_user.id)
 
 	if group:
@@ -226,31 +237,47 @@ def banned():
 
 @app.route("/api/v1/search/<query>", methods=["GET"])
 @app.route("/api/v1/search", methods=["GET"])
-def search(query=None):
-	start = time.time()
-	query = request.args.get("query", query)
-	# print(query)
-	if query is None:
-		print(f"Time taken: {round(time.time() - start, 2)}s.")
-		return {"message": "No query provided"}, 400
-	data = scraper.search(query)
-	# data = f"Search for '{query}'"
+def search_api(query=None):
+	"""
+	Search for movies.
 
+	Args:
+		query (str): The query to search for. This can also be a movie URL.
+
+	Returns:
+		200: OK
+		400: No query provided
+		404: No results found
+	"""
+	tic = time.perf_counter()
+	query = request.args.get("query", query)
+
+	if query is None:
+		print(f"Time taken: {time.perf_counter() - tic:.2f}s.")
+		return {"message": "No query provided\nPlease report error code: BANJO"}, 400
+
+	# lookup cache
+	data = cache.get(query.lower().strip())
+	if data is None:
+		data = scraper.search(query)
+		cache[query.lower()] = data
+	else:
+		print(f"Cache Hit: {query}")
+
+	print(f"Time taken: {time.perf_counter() - tic:.2f}s.")
 	if data == 404:
-		print(f"Time taken: {round(time.time() - start, 2)}s.")
 		return {"message": "No results found"}, 404
-	print(f"Time taken: {round(time.time() - start, 2)}s.")
 	return {"message": "OK", "data": data}, 200
 
 @app.route("/api/v1/searchone/<query>", methods=["GET"])
 @app.route("/api/v1/searchone", methods=["GET"])
-def searchone(query=None):
+def searchone_api(query=None):
 	start = time.time()
 	query = request.args.get("query", query)
 	# print(query)
 	if query is None:
 		print(f"Time taken: {round(time.time() - start, 2)}s.")
-		return {"message": "No query provided"}, 400
+		return {"message": "No query provided\nPlease report error code: BAGEL"}, 400
 	data = scraper.searchone(query)
 	# data = f"Search for '{query}'"
 
@@ -263,7 +290,7 @@ def searchone(query=None):
 @app.route("/api/v1/getvideo/<page_url>", methods=["GET"])
 @app.route("/api/v1/getvideo", methods=["GET"])
 @login_required
-def getvideo(page_url=None):
+def getvideo_api(page_url=None):
 	page_url = request.args.get("page_url", page_url)
 	if page_url is None:
 		return {"message": "No page_url provided"}, 400
@@ -272,7 +299,7 @@ def getvideo(page_url=None):
 	data = scraper.get_video(page_url)
 
 	if data == 404:
-		return {"message": "No results found"}, 404
+		return {"message": "No results found\nPlease report error code: CHERRY"}, 404
 	if data == 225:
 		print("CAPTCHA")
 		image_data = read_image("captcha.png")
@@ -281,7 +308,7 @@ def getvideo(page_url=None):
 
 @app.route("/api/v1/captcha", methods=["POST"])
 @login_required
-def captcha():
+def captcha_api():
 	captcha_response = request.args.get("captcha_response")
 	page_url = request.args.get("page_url")
 	if not captcha_response:
@@ -291,14 +318,13 @@ def captcha():
 	data = scraper.resolve_captcha(captcha_response)
 	if not data:
 		image_data = read_image("captcha.png")
-		return {"message": "CAPTCHA failed", "data": image_data, "page_url": page_url}, 225
+		return {"message": "CAPTCHA failed\nPlease report error code: DRAGON", "data": image_data, "page_url": page_url}, 225
 	return {"message": "CAPTCHA solved", "page_url": page_url}, 200
 	# return {"message": "OK", "data": data}, 200
 
 @app.route("/api/v1/download/<url>/<result>", methods=["POST"])
 @app.route("/api/v1/download", methods=["POST"])
-@login_required
-def download(url=None, result=None):
+def download_api(url=None, result=None):
 	"""
 	Download a video from a result.
 
@@ -318,40 +344,88 @@ def download(url=None, result=None):
 
 	if result is not None:
 		result = json.loads(requests.utils.unquote(result))
-		print(f"DEBUG: Result: {result}")
+		print(f"DEBUG: {result} (result)")
+		# print(f"DEBUG: {url} (url)")
 	elif url is not None:
 		print("\tWARNING: No result provided, getting data from page_url...")
-		result = scraper.find_data_from_url(url)
+		result = cache.get(url)
+		if result is None:
+			result = scraper.find_data_from_url(url)
+			cache[url] = result
 	else:
 		print("\tERROR: No result provided for direct download link.")
-		return {"message": "No result provided for direct download link"}, 400
+		return {"message": "No result provided for direct download link\nPlease report error code: BANANA"}, 400
 	video_url = scraper.get_video(result["page_url"])
+	if video_url == 225:
+		print("CAPTCHA")
+		image_data = read_image("captcha.png")
+		return {"message": "CAPTCHA", "data": image_data, "page_url": result["page_url"]}, 225
 	retry_count = 0
 	while not video_url:
 		video_url = scraper.get_video(result["page_url"])
 		retry_count += 1
 		if retry_count > 5:
 			print("\tERROR: Failed to get video url.")
-			return {"message": "Failed to get video url"}, 508
+			return {"message": "Failed to get video url\nPlease report error code: AVATAR"}, 508
 
 	filename = Format(result).format_filename()
+
+	download_engine = DownloadEngine()
+	downloads = download_engine.downloads
 	# Check if the video is already in the queue
-	if {"url": video_url, "filename": filename} in download_engine.queue:
-		print("DEBUG: Already in queue")
-		return {"message": "Already in queue"}, 200
-
-	# Add the item to the queue
+	for download in downloads:
+		if filename in download.filename:
+			# The download was started but never finished due to a server restart
+			if download.status in ["downloading", "initializing"] and download.last_updated < server_init_time:
+				print(f"DEBUG: {filename} was started but never finished, resuming...")
+				download.delete()
+				break
+			match download.status:
+				case "downloading":
+					print("DEBUG: Already in queue")
+					return {"message": "Already in queue", "result": result}, 200
+				case "initializing":
+					print("DEBUG: Download is initializing")
+					return {"message": "Download is initializing", "result": result}, 200
+				case "finished":
+					if os.path.exists(download.filename):
+						print("DEBUG: Already downloaded")
+						return {"message": "Already downloaded", "result": result}, 200
+					print("DEBUG: Download was finished but file is missing, retrying...")
+					download.delete()
+				case "failed":
+					print(f"DEBUG: {filename} failed to download, retrying...")
+					download.delete()
+				case "not_started":
+					print(f"DEBUG: {filename} was queued but never started ({download.last_updated}), retrying...")
+					download.delete()
+				case _:
+					print(f"DEBUG: {download.status} is not a valid known status for {filename}")
+					return {"message": f"{download.status} is not a valid known status\nPlease report error code: EAGLE"}, 500
+			break
+	user_id = current_user.id if current_user.is_authenticated else "ANYMOOSE"
+	download_engine.create(filename, video_url, user_id, download_quality=result["data"]["quality_tag"])
 	download_engine.queue.append({"url": video_url, "filename": filename})
-	print("Download queued...")
-	print(f"DEBUG: {download_engine.queue}")
-	download_engine.download_file(-1)
-	# for i in range(len(download_engine.queue)):
-		# download_engine.download_file(i)
-		# download_engine.queue.pop(i)
+	download_engine.start()
 
-	print("DEBUG: Download finished!")
-	# Remove the item from the queue after the download is finished
-	# download_engine.queue.remove({"url": url, "filename": filename})
+	# Check if the video is already in the queue
+	# for item in download_engine.queue:
+	# 	if item["filename"] == filename:
+	# 		print("DEBUG: Already in queue")
+	# 		return {"message": "Already in queue"}, 200
+
+	# # Add the item to the queue
+	# download_engine.queue.append({"url": video_url, "filename": filename})
+	# print("Download queued...")
+	# print(f"DEBUG: {download_engine.queue}")
+	# download_succeed = download_engine.download_file(-1)
+	# if not download_succeed:
+	# 	print("\tERROR: Failed to download the video.")
+	# 	return {"message": "Failed to download the video\nPlease report error code: APPLE"}, 508
+
+	# print("DEBUG: Download finished!")
+	# # Remove the item from the queue after the download is finished
+	# # download_engine.queue.remove({"url": url, "filename": filename})
 	return {"message": "Created", "result": result}, 201
 
 @app.route("/login")
@@ -438,7 +512,7 @@ def callback():
 			return redirect(url_for("banned"))
 
 		# Not a member of any group? Return waiting page
-		if not Group_Membership.get(unique_id):
+		if not GroupMembership.get(unique_id):
 			return redirect(url_for("pending"))
 			# return render_template(
 			# 	"pages/pending_approval.html",
@@ -460,9 +534,27 @@ def logout():
 	logout_user()
 	return redirect(url_for("index"))
 
+# @app.route("/test")
+# def test():
+# 	return {"message": "OK"}, 200
+
+@app.route("/test/<filename>")
 @app.route("/test")
-def test():
-	return {"message": "OK"}, 200
+@public_route
+def test(filename=None):
+	filename = request.args.get("filename", filename)
+	download_engine = DownloadEngine()
+	if filename is None:
+		downloads = download_engine.downloads
+		return {"message": download.filename for download in downloads}, 200
+	download = download_engine.get(filename)
+	if download is None:
+		return {"message": "Not found"}, 404
+	return {
+		# "message": "Okay",
+		"filename": download.filename,
+		"status": download.status,
+	}, 200
 
 def get_google_provider_cfg():
 	return requests.get(GOOGLE_DISCOVERY_URL, timeout=30).json()
