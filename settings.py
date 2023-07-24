@@ -27,6 +27,7 @@ PORT = 5000
 # full media and skips verification checks.
 # The default value is False.
 DEBUG_MODE = False
+USE_RELOADER = False
 
 # External API key for The Movie Database's offical API. The tmdbv3api Python
 # library is used to interact with TMDb's API to insert TMDb IDs into the
