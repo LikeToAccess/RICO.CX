@@ -25,8 +25,17 @@ onItemClick = function (result) {
 };
 
 handleDownloadResponse = function (response) {
-	response = JSON.parse(response.responseText);
-	json = JSON.parse(response.responseText);
-	console.log(json.message);
-	console.log(json.data);
+	// response = JSON.parse(response.responseText);
+	const json = JSON.parse(response.responseText);
+	// Response is 200 or 201
+	if ([200, 201].includes(response.status)) {
+		console.log(json.message);
+		console.log(json.result);
+	}
+	if (response.status == 225) {
+		const captchaImage = json.data;
+		const page_url = json.page_url;
+		console.log("HTTP response status code: "+ response.status +"\n"+ json.message);
+		captchaPopUp(captchaImage, page_url);
+	}
 };

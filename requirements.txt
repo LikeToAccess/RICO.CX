@@ -4,11 +4,10 @@ Flask-Login
 tmdbv3api
 tqdm
 requests
-webdriver-manager
 selenium
 oauthlib
 cryptography
 jmespath
 waitress
-
+cachetools
 discord

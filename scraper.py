@@ -8,7 +8,7 @@
 # usage             : python main.py
 # notes             :
 # license           : MIT
-# py version        : 3.10.2 (must run on 3.6 or higher)
+# py version        : 3.10.2 (must run on 3.10 or higher)
 #==============================================================================
 import os
 import time
@@ -19,7 +19,7 @@ from selenium.common.exceptions import *
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+# from webdriver_manager.chrome import ChromeDriverManager
 from file import *
 from settings import *
 from find_captcha import Find_Captcha
@@ -47,7 +47,7 @@ class Scraper(Find_Captcha):
 			options.add_argument("--window-size=1920,1080")
 			# options.add_argument("--disable-gpu")
 			options.add_argument("--mute-audio")
-		self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+		self.driver = webdriver.Chrome(service=Service(), options=options)
 		super().__init__(self.driver)
 		print(f"Completed init in {round(time.time()-init_timestamp,2)}s.")
 
@@ -333,6 +333,10 @@ class Scraper(Find_Captcha):
 				print("WARNING: 'search_term' should be a direct link to video page!")
 				print(f"\tGot: '{search_term}'")
 				return 404
+			else:
+				print("Running via direct link...")
+				self.open_link(url)
+				return [self.find_data_from_url(url)]
 		else:
 			self.open_link(f"https://gomovies-online.cam/search/{search_term}")
 

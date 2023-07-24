@@ -4,7 +4,7 @@ CREATE TABLE user (
 	last_name TEXT NOT NULL,
 	email TEXT NOT NULL UNIQUE,
 	profile_pic TEXT NOT NULL,
-	account_created INTEGER NOT NULL,
+	account_created REAL NOT NULL,
 	banned INTEGER DEFAULT FALSE NOT NULL
 );
 
@@ -26,6 +26,21 @@ CREATE TABLE group_members (
 			ON DELETE CASCADE 
 			ON UPDATE NO ACTION
 );
+
+CREATE TABLE downloads (
+	download_filename TEXT PRIMARY KEY,
+	download_url TEXT NOT NULL,
+	download_size INTEGER,
+	download_quality TEXT,
+	last_updated REAL NOT NULL,
+	user_id TEXT NOT NULL,
+	download_status TEXT DEFAULT "not_started" NOT NULL,
+	FOREIGN KEY (user_id)
+		REFERENCES user (user_id)
+			ON DELETE CASCADE
+			ON UPDATE NO ACTION
+);
+
 
 INSERT INTO main.groups (group_id, group_name) VALUES
 	("100", "Standard Users"),

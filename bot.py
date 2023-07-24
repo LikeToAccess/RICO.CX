@@ -8,7 +8,7 @@
 # usage             : python bot.py
 # notes             :
 # license           : MIT
-# py version        : 3.11.1 (must run on 3.6 or higher)
+# py version        : 3.11.1 (must run on 3.10 or higher)
 #==============================================================================
 import json
 import discord

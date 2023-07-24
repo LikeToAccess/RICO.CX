@@ -82,3 +82,11 @@
 	bottom: 10px;
 	background-color: rgba(0, 181, 216, 0.6);
 }
+
+.result-quality {
+	top: 5px;
+	left: 5px;
+	margin-left: 0;
+	background-color: rgba(249, 104, 131, 1.0);
+	pointer-events: none;
+}

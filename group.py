@@ -1,7 +1,7 @@
 from database import get_db
 
 
-class Group_Membership:
+class GroupMembership:
 	def __init__(self, group_id, user_id, role):
 		self.group_id = group_id
 		self.user_id = user_id
@@ -23,7 +23,7 @@ class Group_Membership:
 			"SELECT * FROM groups WHERE group_id = ?", (group_id,)
 		).fetchone()[1]
 
-		group_member = Group_Membership(
+		group_member = GroupMembership(
 			group_id=group_id,
 			user_id=user_id,
 			role=role
@@ -49,7 +49,7 @@ class Group_Membership:
 			).fetchone()[1]
 
 			group_member_list.append(
-				Group_Membership(
+				GroupMembership(
 					group_id=group_id,
 					user_id=user_id,
 					role=role

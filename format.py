@@ -8,7 +8,7 @@
 # usage             : python main.py
 # notes             : This file should not be run directly
 # license           : MIT
-# py version        : 3.10.2 (must run on 3.6 or higher)
+# py version        : 3.10.2 (must run on 3.10 or higher)
 #==============================================================================
 import re
 import os
@@ -75,8 +75,8 @@ def find_season_number_from_tv_show(data, regex=r"(\s-\sSeason\s\d)(?!.*\s-\sSea
 		season_number = "0"+ season_number
 	return season_number
 
-def find_episode_number_from_tv_show(data, regex=r"(\sEpisode\s\d+)(?!.*\sEpisode\s\d+)"):
-	# print(data)
+def find_episode_number_from_tv_show(data, regex=r"(\sEpisode\s\d+)(?!.*\sEpisode\s\d+)", retry_count=0):
+	# print(f"DEBUG: {data} (data)")
 	try:
 		episode_number = \
 			re.findall(
@@ -87,7 +87,11 @@ def find_episode_number_from_tv_show(data, regex=r"(\sEpisode\s\d+)(?!.*\sEpisod
 				)[-1]
 			)[0]
 	except IndexError:
-		return find_episode_number_from_tv_show(data, r"(\sEpisode\d+)(?!.*\sEpisode\d+)")
+		if retry_count > 0:
+			print(f"DEBUG: {data} (data)")
+			print(f"ERROR: Unable to find episode number after {retry_count} {'retries' if retry_count > 1 else 'retry'}")
+			return "XX"
+		return find_episode_number_from_tv_show(data, r"(\sEpisode\d+)(?!.*\sEpisode\d+)", retry_count+1)
 	if len(episode_number) < 2:
 		episode_number = "0"+ episode_number
 	return episode_number
@@ -140,9 +144,15 @@ class Format:
 		if ", " in release_country:
 			release_country = release_country.split(", ")[0]
 
+		# Check and fix common typos such as Episdoe -> Episode
+		if self.type == ("TV SHOW", True):  # Episode
+			if "Episdoe" in title:
+				title = title.replace("Episdoe", "Episode")
+
 		self.region = regions[release_country]
 		self.bad_characters = "<>:\"/\\|?*"
 		self.safe_title = make_string_filesystem_safe(title, self.bad_characters)
+
 
 	def movie(self):
 		query = {

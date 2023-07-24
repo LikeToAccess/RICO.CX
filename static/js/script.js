@@ -98,6 +98,7 @@ function handleSearchResponse(response) {
 		year     = result.data.release_year;
 		imdb     = result.data.imdb_score;
 		duration = result.data.duration;
+		quality  = result.data.quality_tag;
 		// page_url = result.page_url;
 		search_result = document.createElement("div");
 		search_result.setAttribute("class", "search-result");
@@ -114,6 +115,8 @@ function handleSearchResponse(response) {
 			<p class="result-imdb label"> IMDb: ${imdb} </p>
 			<p class="result-duration label"> ${duration} </p>
 		`;
+		if (quality == "CAM")
+			search_result.innerHTML += `\n<p class="result-quality label"> ${quality} </p>`;
 		results_section.appendChild(search_result);
 	}
 }
@@ -122,9 +125,9 @@ function onItemClick(result) {
 	httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download/"+ result, handleDownloadResponse);
 }
 
-function handleDownloadResponse(response) {
-	console.log("handleDownloadResponse: "+ response);
-}
+// function handleDownloadResponse(response) {
+// 	console.log("handleDownloadResponse: "+ response);
+// }
 
 function handleCaptchaResponse(response) {
 	// response contains result data or captcha error
@@ -133,7 +136,8 @@ function handleCaptchaResponse(response) {
 	if (response.status == 200) {
 		overlay = document.getElementsByClassName("overlay")[0];
 		if (overlay) overlay.remove();
-		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
+		// httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
+		httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download?url="+ json.page_url, handleDownloadResponse);
 	} else if (response.status == 225) {
 		const captchaImage = json.data;
 		const page_url = json.page_url;
@@ -167,7 +171,7 @@ function setCookie(name, value, expires) {
 	document.cookie = cookie;
 }
 
-function captchaPopUp(src, video_url) {
+function captchaPopUp(src, page_url) {
 	// <div class="overlay">
 	// 	<div id="captcha-container">
 	// 		<p>Captcha!</p>
@@ -217,7 +221,7 @@ function captchaPopUp(src, video_url) {
 		e.preventDefault();
 		captchaResponse = captchaResponseElement.value;
 		console.log("Submitting captcha response: "+ captchaResponse);
-		httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/captcha?video_url="+ video_url +"&captcha_response="+ captchaResponse, handleCaptchaResponse);
+		httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/captcha?page_url="+ page_url +"&captcha_response="+ captchaResponse, handleCaptchaResponse);
 	});
 }
 
@@ -230,11 +234,12 @@ function httpPostAsync(url, callback, method="POST") {
 	var xmlHttp = new XMLHttpRequest();
 	xmlHttp.onreadystatechange = function() {
 		// console.log(xmlHttp);
-		if (xmlHttp.readyState == 4 && (xmlHttp.status == 200 || xmlHttp.status == 225))
+		if (xmlHttp.readyState == 4 && [200, 225].includes(xmlHttp.status))
 			callback(xmlHttp);
-		else if (xmlHttp.readyState == 4 && xmlHttp.status != 200)
+		else if (xmlHttp.readyState == 4 && ![200, 201].includes(xmlHttp.status))
 			alert(JSON.parse(xmlHttp.responseText).message);
-			// removePreloader();
+		else if (xmlHttp.readyState == 4 && xmlHttp.status == 404)
+			removePreloader();
 			// callback(xmlHttp);
 	};
 	xmlHttp.open(method, url, true); // true for asynchronous
