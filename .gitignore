@@ -6,6 +6,7 @@ __pycache__/
 # C extensions
 *.so
 
+.fleet
 selenium_data/
 captcha.png
 database.db
