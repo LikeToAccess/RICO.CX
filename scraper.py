@@ -410,6 +410,7 @@ class Scraper(Find_Captcha):
 			.replace("_360&token=ip=", f"_{best_quality}&token=ip=")
 
 		print(f"\tVideo link converted to {best_quality}p.")
+		print(f"DEBUG (modified_video_url): {modified_video_url}")
 
 		return [modified_video_url]
 
@@ -516,9 +517,9 @@ class Scraper(Find_Captcha):
 def main():
 	print("Starting scraper...")
 	scraper = Scraper()
-	query = "the matrix"
-	query = "https://gomovies-online.cam/all-films-2"
-	query = input("Enter search query:\n> ")
+	query = "bird box"
+	# query = "https://gomovies-online.cam/all-films-2"
+	# query = input("Enter search query:\n> ")
 	print(json.dumps(scraper.search(query), indent=4))
 	scraper.close()
 

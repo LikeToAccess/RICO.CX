@@ -10,8 +10,8 @@
 # license           : MIT
 # py version        : 3.11.0 (must run on 3.10 or higher)
 #==============================================================================
+# IT WORKS, WE DON'T TOUCH THIS FILE.
 import os
-import time
 
 import requests
 from tqdm import tqdm
@@ -50,7 +50,7 @@ class DownloadEngine(Download):
 			request = requests.get(url, stream=True, headers=resume_header, timeout=120)
 		except requests.exceptions.ConnectionError:
 			return self.download_file(position)
-		if request.status_code == 404:
+		if request.status_code in {403, 404}:
 			if retry_count < self.max_retries:
 				print(f"\tWARNING: File not found on server, status code {request.status_code}, retrying ({retry_count + 1}/{self.max_retries})...")
 				return self.download_file(position, retry_count=retry_count + 1)

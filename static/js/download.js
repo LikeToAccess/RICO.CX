@@ -17,9 +17,8 @@
 // }
 
 onItemClick = function (result) {
-	result = JSON.stringify(result);
 	// encode result to be url safe
-	result = encodeURIComponent(result);
+	result = encodeURIComponent(JSON.stringify(result));
 	console.log(result);
 	httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download?result="+ result, handleDownloadResponse);
 };

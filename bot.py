@@ -13,11 +13,13 @@
 import json
 import discord
 
+import requests
+
 from discord.ext import commands
 
-from download import threaded_download
+# from download import threaded_download
 from scraper import Scraper
-from settings import DISCORD_BOT_TOKEN
+from settings import DISCORD_BOT_TOKEN, HOST, PORT
 
 
 scraper = Scraper()
@@ -33,7 +35,7 @@ bot = commands.Bot(
 			"pls ",
 			"Pls ",
 			"PLS ",
-			"!"
+			"!",
 		),
 		intents=intents,
 		case_insensitive=True
@@ -43,7 +45,7 @@ bot = commands.Bot(
 def create_embed(data, color=0xCBAF2F):
 	title = data["title"]
 	poster_url = data["poster_url"]
-	page_url = data["page_url"]
+	# page_url = data["page_url"]
 	data = data["data"]
 	embed = discord.Embed(
 			title=title,
@@ -68,7 +70,7 @@ async def on_ready():
 @bot.command(name="search", help="Search for a movie and return the results.")
 async def search(ctx, *args):
 	query = " ".join(args) if isinstance(args, tuple) else args
-	print(f"DEBUG (query): {query}")
+	# print(f"DEBUG (query): {query}")
 	results = scraper.searchone(query)
 
 	if results == 404:
@@ -88,7 +90,7 @@ async def popular(ctx, count=5):
 @bot.command(name="download", aliases=["add"], help="Download a movie onto the Plex server.")
 async def download(ctx, *args):
 	query = " ".join(args) if isinstance(args, tuple) else args
-	print(f"DEBUG (query): {query}")
+	# print(f"DEBUG (query): {query}")
 	message = await ctx.send("Searching...")
 	data = scraper.searchone(query)
 
@@ -105,8 +107,27 @@ async def download(ctx, *args):
 		# TODO: Add captcha solving
 		return
 	await message.edit(content="Starting download...")
-	threaded_download(url, data)
-	await message.edit(content="Download started.")
+	# threaded_download(url, data)
+	encoded_result = requests.utils.quote(json.dumps(data))
+	print(f"DEBUG (ecoed_result): {encoded_result}")
+	resp = requests.post(
+	    f"https://127.0.0.1:{PORT}/api/v1/download?result="+encoded_result,
+	    timeout=3600,
+	    verify=False
+	)
+	# print(f"DEBUG (resp.text): {resp.text}")
+	resp_message = json.loads(resp.text)["message"]
+	print(f"{resp.status_code} | {resp_message}")
+	print(resp.text)
+	match resp.status_code:
+		case 200:
+			await message.edit(content=f"**{data['title']}** is already in-progress or has already been downloaded.\n```{resp_message}```")
+		case 201:
+			await message.edit(content=f"Downloaded **{data['title']}**.\n```{resp_message}```")
+		case (400, 508, _):
+			await message.edit(content=f"Failed to download **{data['title']}**\n```{resp_message}```.")
+
+	# await message.edit(content="Download started.")
 
 @bot.command(name="solve", aliases=["captcha"], help="Solves a captcha.")
 async def solve(ctx, solution=None):
