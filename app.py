@@ -112,10 +112,11 @@ def check_route_access():
 		return None # Access granted (logged in + not banned + in group)
 	if request.endpoint is None:
 		# Remove trailing slash
+		print("Redirecting to remove trailing slash")
 		return redirect(request.url.rstrip("/"))
 	if any([
 		request.endpoint.startswith("static"),
-		request.host_url.startswith("https://127.0.0.1:9000/"),
+		request.host_url.startswith("https://127.0.0.1"),
 		getattr(app.view_functions[request.endpoint], "is_public", False)
 	]):
 		return None # Access granted (public or static route or localhost)
