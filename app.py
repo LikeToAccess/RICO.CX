@@ -316,9 +316,10 @@ def captcha_api():
 		return {"message": "No captcha_response provided"}, 400
 	if not page_url:
 		return {"message": "No page_url provided"}, 400
-	data = scraper.resolve_captcha(captcha_response)
-	if not data:
+	captcha_is_solved = scraper.resolve_captcha(captcha_response)
+	if not captcha_is_solved:
 		image_data = read_image("captcha.png")
+		print(f"DEBUG (captcha_response): {captcha_response}")
 		return {"message": "CAPTCHA failed\nPlease report error code: DRAGON", "data": image_data, "page_url": page_url}, 225
 	return {"message": "CAPTCHA solved", "page_url": page_url}, 200
 	# return {"message": "OK", "data": data}, 200
