@@ -78,8 +78,8 @@ class DownloadEngine(Download):
 					  initial=initial_pos,
 					  ascii=True, miniters=1) as pbar:
 				try:
-					if DEBUG_MODE:
-						return "DEBUG_MODE"
+					# if DEBUG_MODE:
+					# 	return "DEBUG_MODE"
 					for chunk in request.iter_content(32 * block_size):
 						file.write(chunk)
 						pbar.update(len(chunk))
@@ -88,7 +88,7 @@ class DownloadEngine(Download):
 					return self.download_file(position)
 
 		# Check if download was successful
-		if remote_file_size != local_file_size and not DEBUG_MODE:
+		if remote_file_size != local_file_size:# and not DEBUG_MODE:
 			# print("\tConnection interrupted, retrying...")
 			return self.download_file(position)
 		print(f"\tDownload complete. ({local_file_size} of {remote_file_size} bytes downloaded)")

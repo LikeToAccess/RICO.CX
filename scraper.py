@@ -54,6 +54,9 @@ class Scraper(Find_Captcha):
 	def open_link(self, url):
 		self.driver.get(url)
 
+	def reload(self):
+		self.driver.refresh()
+
 	def current_url(self):
 		return self.driver.current_url
 

@@ -167,6 +167,10 @@ class Format:
 			count = len(tmdb_results)
 			print(f"\tFound {count} {'result' if count == 1 else 'results'} for TMDb lookup.")
 			if not tmdb_results:
+				if re.search(r"\(\d{4}\)$", query["query"]):
+					query["query"] = re.sub(r"\(\d{4}\)$", "", query["query"]).strip()
+					print(f"\tRetrying TMDb lookup with edits: {query['query']}")
+					continue
 				print(f"\tWARNING: No TMDb results for query: '{query}'.")
 				break
 			tmdb_top = tmdb_results[0]
@@ -211,6 +215,10 @@ class Format:
 			count = len(tmdb_results)
 			print(f"\tFound {count} {'result' if count == 1 else 'results'} for TMDb lookup.")
 			if not tmdb_results:
+				if re.search(r"\(\d{4}\)$", query["query"]):
+					query["query"] = re.sub(r"\(\d{4}\)$", "", query["query"]).strip()
+					print(f"\tRetrying TMDb lookup with edits: {query['query']}")
+					continue
 				print(f"\tWARNING: No TMDb results for query: {query}")
 				break
 			tmdb_top = tmdb_results[0]
@@ -273,7 +281,7 @@ class Format:
 
 
 def main():
-	file_name = Format({'title': 'Flushed Away', 'page_url': 'https://gomovies-online.cam/watch-film/flushed-away/6N8p178f', 'poster_url': 'https://static.gomovies-online.cam/dist/img/UI8PAe7IzXTeCQl4aF9SqFxc5YsWt9wHRD2UgAy3culxFUdWsD5ckp32IfKlMqWNZmsCMpsk2sffXG_NWWAfaWQkhVjoB4hR32MXmEumXW0.jpg', 'data': {'title': 'Flushed Away', 'release_year': '2006', 'imdb_score': 'IMDb: 6.6', 'duration': '85 min', 'release_country': 'United States, United Kingdom', 'genre': 'Comedy, Adventure, Animation', 'description_preview': 'After an ignoble landing in Ratropolis, a pampered rodent\xa0that gets flushed down the toilet from his penthouse apartment\xa0enlists the help of a...', 'key': '0', 'quality_tag': 'HD', 'user_rating': '5.000000'}})
+	file_name = Format({'title': 'Flushed Away (2023)', 'page_url': 'https://gomovies-online.cam/watch-film/flushed-away/6N8p178f', 'poster_url': 'https://static.gomovies-online.cam/dist/img/UI8PAe7IzXTeCQl4aF9SqFxc5YsWt9wHRD2UgAy3culxFUdWsD5ckp32IfKlMqWNZmsCMpsk2sffXG_NWWAfaWQkhVjoB4hR32MXmEumXW0.jpg', 'data': {'title': 'Flushed Away', 'release_year': '2006', 'imdb_score': 'IMDb: 6.6', 'duration': '85 min', 'release_country': 'United States, United Kingdom', 'genre': 'Comedy, Adventure, Animation', 'description_preview': 'After an ignoble landing in Ratropolis, a pampered rodent\xa0that gets flushed down the toilet from his penthouse apartment\xa0enlists the help of a...', 'key': '0', 'quality_tag': 'HD', 'user_rating': '5.000000'}})
 	file_name.run()
 
 

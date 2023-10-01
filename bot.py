@@ -19,7 +19,7 @@ from discord.ext import commands
 
 # from download import threaded_download
 from scraper import Scraper
-from settings import DISCORD_BOT_TOKEN, HOST, PORT
+from settings import DISCORD_BOT_TOKEN, PORT, DEBUG_MODE
 
 
 scraper = Scraper()
@@ -111,9 +111,9 @@ async def download(ctx, *args):
 	encoded_result = requests.utils.quote(json.dumps(data))
 	print(f"DEBUG (ecoed_result): {encoded_result}")
 	resp = requests.post(
-	    f"https://127.0.0.1:{PORT}/api/v1/download?result="+encoded_result,
-	    timeout=3600,
-	    verify=False
+		f"http{'s' if DEBUG_MODE else ''}://127.0.0.1:{PORT}/api/v1/download?result="+encoded_result,
+		timeout=600,
+		verify=False
 	)
 	# print(f"DEBUG (resp.text): {resp.text}")
 	resp_message = json.loads(resp.text)["message"]
@@ -152,9 +152,25 @@ async def solve(ctx, solution=None):
 	}
 	solution = "".join([autocorrect_dictionary.get(c, c) for c in solution])
 	print(f"DEBUG (solution): {solution}")
-	if not solution.isalpha() or len(solution) != 7:
+	if not solution.isalpha() or not 8 > len(solution) > 5:
 		await ctx.reply("Invalid solution. Please try again.", mention_author=False)
 		return
+
+	resp = requests.post(
+		f"http{'s' if DEBUG_MODE else ''}://127.0.0.1:{PORT}/api/v1/captcha?page_url=null&captcha_response={solution}",
+		timeout=5,
+		verify=False
+	)
+
+	if resp.status_code == 225:
+		await ctx.reply("Failed to solve captcha.", mention_author=False)
+		return
+
+	scraper.reload()
+	message = json.loads(resp.text)["message"] \
+		if resp.text.startswith("{") and resp.text.endswith("}") \
+		else resp.text
+	await ctx.reply(message, mention_author=False)
 
 @bot.command(name="react", help="Post a reaction.")
 async def react(ctx):

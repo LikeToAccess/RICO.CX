@@ -117,6 +117,7 @@ def check_route_access():
 	if any([
 		request.endpoint.startswith("static"),
 		request.host_url.startswith("https://127.0.0.1"),
+		request.host_url.startswith("http://127.0.0.1"),
 		getattr(app.view_functions[request.endpoint], "is_public", False)
 	]):
 		return None # Access granted (public or static route or localhost)
@@ -308,7 +309,6 @@ def getvideo_api(page_url=None):
 	return {"message": "OK", "data": data}, 200
 
 @app.route("/api/v1/captcha", methods=["POST"])
-@login_required
 def captcha_api():
 	captcha_response = request.args.get("captcha_response")
 	page_url = request.args.get("page_url")
