@@ -4,6 +4,7 @@ RICO.GA but the letter A is replaced with a Q but the letter G is replaced with 
 **Error code mapping:**
 * APPLE:  508 - Failed to download the video (download)
 * AVATAR: 508 - Failed to get video url (download)
+* ASTRO:  508 - Failed to get video data (download)
 * BANANA: 400 - No result provided for direct download link (download)
 * BAGEL:  400 - No query provided (searchone)
 * BANJO:  400 - No query provided (search)
