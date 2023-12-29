@@ -3,10 +3,10 @@ function submitSearch(query, first_result_only=false) {
 	// button.setAttribute("style", "animation: pulsate-fwd 0.5s ease-in-out both;");
 	if (first_result_only) {
 		console.log("Submitting searchone for: "+ query);
-		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/searchone?query="+ query, handleSearchoneResponse);
+		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v2/searchone?q="+ query, handleSearchoneResponse);
 	} else {
 		console.log("Submitting search for: "+ query);
-		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/search?query="+ query, handleSearchResponse);
+		httpGetAsync(API_HOST +":"+ API_PORT +"/api/v2/search?q="+ query, handleSearchResponse);
 	}
 }
 
@@ -25,7 +25,8 @@ if (form) {
 }
 
 function handlePopularOnClick() {
-	submitSearch("https://gomovies-online.cam/all-films-2");
+	createPreloader();
+	httpGetAsync(API_HOST +":"+ API_PORT +"/api/v2/popular", handleSearchResponse);
 }
 
 var video_id = document.getElementById("video-id");
@@ -93,23 +94,24 @@ function handleSearchResponse(response) {
 	results = json.data;
 	for (let i = 0; i < results.length; i++) {
 		result = results[i];
-		poster   = result.poster_url;
+		poster   = "https://m.media-amazon.com/images/I/51Q6q+kdkcL._AC_UF894,1000_QL80_.jpg";
 		title    = result.title;
-		year     = result.data.release_year;
-		imdb     = result.data.imdb_score;
-		duration = result.data.duration;
-		quality  = result.data.quality_tag;
+		year     = result.year;
+		imdb     = "9.8";
+		duration = "412 min";
+		quality  = "HD";
 		// page_url = result.page_url;
 		search_result = document.createElement("div");
 		search_result.setAttribute("class", "search-result");
 		search_result.setAttribute("id", "id-"+ i);
 		// search_result.setAttribute("data-page-url", page_url);
 		// search_result.setAttribute("onclick", "onItemClick(this);");
+		var page_url = result.page_url;
 		result = JSON.stringify(result);
 		// console.log("result: "+ result);
 		// console.log(`result: ${encodeURIComponent(result)}`);
 		search_result.innerHTML = `
-			<img src="${poster}" class="result-thumbnail" onclick='httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download?result=${encodeURIComponent(result)}", handleDownloadResponse);'>
+			<img src="${poster}" class="result-thumbnail" onclick='httpPostAsync(API_HOST +":"+ API_PORT +"/api/v2/download?page_url=${encodeURIComponent(page_url)}", handleDownloadResponse);'>
 			<p class="result-title">${title}</p>
 			<p class="result-year label"> ${year} </p>
 			<p class="result-imdb label"> IMDb: ${imdb} </p>
@@ -121,9 +123,9 @@ function handleSearchResponse(response) {
 	}
 }
 
-function onItemClick(result) {
-	httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download/"+ result, handleDownloadResponse);
-}
+// function onItemClick(page_url) {
+// 	httpPostAsync(API_HOST +":"+ API_PORT +"/api/v2/download?page_url="+ page_url, handleDownloadResponse);
+// }
 
 // function handleDownloadResponse(response) {
 // 	console.log("handleDownloadResponse: "+ response);
@@ -137,7 +139,7 @@ function handleCaptchaResponse(response) {
 		overlay = document.getElementsByClassName("overlay")[0];
 		if (overlay) overlay.remove();
 		// httpGetAsync(API_HOST +":"+ API_PORT +"/api/v1/getvideo?page_url="+ json.data.page_url, handleGetvideoResponse);
-		httpPostAsync(API_HOST +":"+ API_PORT +"/api/v1/download?url="+ json.page_url, handleDownloadResponse);
+		httpPostAsync(API_HOST +":"+ API_PORT +"/api/v2/download?url="+ json.page_url, handleDownloadResponse);
 	} else if (response.status == 225) {
 		const captchaImage = json.data;
 		const page_url = json.page_url;

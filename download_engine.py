@@ -26,7 +26,7 @@ class DownloadEngine(Download):
 		self.queue = []
 		self.max_retries = 5
 
-	def downloader(self, position:int, resume_position:int=None, retry_count:int=0) -> None:
+	def downloader(self, position: int, resume_position: int | None = None, retry_count: int = 0) -> bool | None:
 		"""Download url in ``queue[position]`` to disk with possible resumption.
 		Parameters
 
@@ -38,7 +38,7 @@ class DownloadEngine(Download):
 		# Get size of local & remote files
 		url = self.queue[position]["url"]
 		filename = self.queue[position]["filename"]
-		request = requests.head(url, timeout=120)
+		request = requests.head(url, timeout=120, allow_redirects=True)
 		remote_file_size = int(request.headers.get("content-length", 0))
 		local_file_size = os.path.getsize(filename) if os.path.exists(filename) else 0
 
@@ -47,7 +47,7 @@ class DownloadEngine(Download):
 
 		try:
 			# Establish connection
-			request = requests.get(url, stream=True, headers=resume_header, timeout=120)
+			request = requests.get(url, stream=True, headers=resume_header, timeout=120, allow_redirects=True)
 		except requests.exceptions.ConnectionError:
 			return self.download_file(position)
 		if request.status_code in {403, 404}:
@@ -58,6 +58,12 @@ class DownloadEngine(Download):
 			return False
 			# print("\tERROR: File not found on server.")
 			# download_file(position, retry_count+1)
+		if request.status_code in {301, 302}:
+			if retry_count < self.max_retries:
+				print(f"\tWARNING: File not found on server, status code {request.status_code}, retrying ({retry_count + 1}/{self.max_retries})...")
+				return self.download_file(position, retry_count=retry_count + 1)
+			print("\tERROR: Too many redirects, skipping...")
+			return False
 		if request.status_code not in {200, 206}:  # 206 is partial content
 			print(f"\tERROR: Failed to establish connection, status code {request.status_code}.")
 			return False
@@ -116,7 +122,7 @@ class DownloadEngine(Download):
 		filename = self.queue[position]["filename"]
 		# queue.remove({"url": url, "filename": filename})
 		# queue.pop(position)
-		request = requests.head(url, timeout=120)
+		request = requests.head(url, timeout=120, allow_redirects=True)
 		if request.status_code == 404:
 			if retry_count < self.max_retries:
 				print(f"\tWARNING: File not found on server, status code {request.status_code}, retrying ({retry_count + 1}/{self.max_retries})...")

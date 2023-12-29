@@ -1,4 +1,7 @@
+aiohttp==3.9.0b0
+werkzeug==2.3.0
 Flask
+Flask[async]
 Flask-Cors
 Flask-Login
 tmdbv3api
@@ -11,3 +14,4 @@ jmespath
 waitress
 cachetools
 discord
+lxml

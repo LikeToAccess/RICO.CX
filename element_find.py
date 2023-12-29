@@ -10,11 +10,13 @@
 # license           : MIT
 # py version        : 3.10.2
 #==============================================================================
-from selenium.common.exceptions import *
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 
+import lxml.html
 
-class Find_Element:
+
+class FindElement:
 	def __init__(self, driver):
 		self.driver = driver
 
@@ -44,3 +46,7 @@ class Find_Element:
 				return data
 
 		return False
+
+def find_elements_by_xpath(html_string, sequence):
+	doc = lxml.html.fromstring(html_string)
+	return doc.xpath(sequence)
