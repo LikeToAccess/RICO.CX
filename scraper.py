@@ -67,10 +67,16 @@ class Goojara(ScraperTools):
 			video_data["year"] = year
 			if tmdb_result is None:
 				print(f"Could not find {title} ({year}) on TMDb.")
+				video_data["readable_title"] = title
 				title = title +f" ({year})"
 			else:
 				tmdb_id = str(tmdb_result["id"])
 				title = title +f" ({year})"+" {tmdb-"+tmdb_id+"}"
+				tmdb_details = tmdb.details_movie(int(tmdb_id))
+				video_data["duration"] = tmdb_details["runtime"]
+				video_data["duration"] = video_data["duration"] if video_data["duration"] else "N/A"
+				video_data["readable_title"] = tmdb_details["title"]
+				# video_data["poster"] = "https://image.tmdb.org/t/p/w200"+ tmdb_details["poster_path"]
 			video_data["title"] = f"{title}/{title}"
 		elif catagory == "episode":
 			show_title = catagories[1]  # Rick and Morty S7
@@ -90,14 +96,26 @@ class Goojara(ScraperTools):
 			# title = f"{show_title} {season}{episode}"
 			tmdb_result = tmdb.search_tv_show(show_title)
 			if tmdb_result is None:
+				video_data["readable_title"] = f"{show_title} - {season}{episode} - {episode_title}"
 				video_data["title"] = f"{show_title}/{show_title} - {season}{episode} - {episode_title}"
 				return video_data
 			year = tmdb_result["first_air_date"][:4]
 			tmdb_id = str(tmdb_result["id"])
 			title = f"{show_title} ({year})"
 			video_data["title"] = title+" {tmdb-"+tmdb_id+"}/"+title+f" - {season}{episode} - {episode_title}"
+			tmdb_details = tmdb.details_tv(int(tmdb_id))
+			video_data["duration"] = tmdb_details["episode_run_time"]
+			video_data["duration"] = video_data["duration"][0] if video_data["duration"] else "N/A"
+			video_data["readable_title"] = f"{tmdb_details["name"]} - {season}{episode} - {episode_title}"
+			# print(video_data["duration"])
+			# print(video_data["poster"])
+
+		if tmdb_id:
+			video_data["poster"] = "https://image.tmdb.org/t/p/w200"+ tmdb_details["poster_path"]
+			video_data["score"]  = f"{tmdb_details["vote_average"]/10:.0%}"
 
 		video_data["year"] = year
+		video_data["quality"] = "SD"
 
 		return video_data
 

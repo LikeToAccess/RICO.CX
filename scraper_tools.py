@@ -17,7 +17,7 @@ from collections.abc import Callable
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
-from tmdbv3api import TMDb, Search  # type: ignore[import-untyped]
+from tmdbv3api import TMDb, Search, Movie, TV  # type: ignore[import-untyped]
 
 from element_find import FindElement
 from element_wait_until import WaitUntilElement
@@ -102,6 +102,12 @@ class TMDbTools:
 	def search_tv_show(self, query: str) -> dict | None:
 		results = self.search_tv_shows(query)
 		return results[0] if results else None
+
+	def details_movie(self, movie_id: int) -> dict:
+		return Movie().details(movie_id)
+
+	def details_tv(self, tv_id: int) -> dict:
+		return TV().details(tv_id)
 
 	# def get_tv_show_release_year(self, query):
 	# 	return self.search_tv_show(query)["first_air_date"][:4]

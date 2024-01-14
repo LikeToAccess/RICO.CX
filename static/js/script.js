@@ -85,7 +85,7 @@ function handleSearchResponse(response) {
 	// 		<img id="{{ index }}" src="{{ poster }}" class="result-thumbnail" onclick="onItemClick({{ result }});">
 	// 		<p class="result-title">{{ title }}</p>
 	// 		<p class="result-year label"> {{ year }} </p>
-	// 		<p class="result-imdb label"> {{ imdb }} </p>
+	// 		<p class="result-score label"> {{ imdb }} </p>
 	// 		<p class="result-duration label"> {{ duration }} </p>
 	// 	</div>
 	// {% endfor %}
@@ -94,12 +94,12 @@ function handleSearchResponse(response) {
 	results = json.data;
 	for (let i = 0; i < results.length; i++) {
 		result = results[i];
-		poster   = "https://m.media-amazon.com/images/I/51Q6q+kdkcL._AC_UF894,1000_QL80_.jpg";
-		title    = result.title;
+		poster   = result.poster;
+		title    = result.readable_title;
 		year     = result.year;
-		imdb     = "9.8";
-		duration = "412 min";
-		quality  = "HD";
+		score    = result.score;
+		duration = result.duration;
+		quality  = result.quality;
 		// page_url = result.page_url;
 		search_result = document.createElement("div");
 		search_result.setAttribute("class", "search-result");
@@ -114,10 +114,10 @@ function handleSearchResponse(response) {
 			<img src="${poster}" class="result-thumbnail" onclick='httpPostAsync(API_HOST +":"+ API_PORT +"/api/v2/download?page_url=${encodeURIComponent(page_url)}", handleDownloadResponse);'>
 			<p class="result-title">${title}</p>
 			<p class="result-year label"> ${year} </p>
-			<p class="result-imdb label"> IMDb: ${imdb} </p>
-			<p class="result-duration label"> ${duration} </p>
+			<p class="result-score label"> ${score} </p>
+			<p class="result-duration label"> ${duration} min </p>
 		`;
-		if (quality == "CAM")
+		if (quality == "CAM" || quality == "SD")
 			search_result.innerHTML += `\n<p class="result-quality label"> ${quality} </p>`;
 		results_section.appendChild(search_result);
 	}
