@@ -251,9 +251,9 @@ def banned():
 	print("DEBUG: Not Banned")
 	return redirect(url_for("index"))
 
+# @timer
 @app.route("/api/v2/search", methods=["GET"])
-@timer
-def search_api(query=None):
+async def search_api(query=None):
 	"""
 	Search for movies.
 
@@ -275,7 +275,25 @@ def search_api(query=None):
 		if not data:
 			return {"message": "No results found"}, 404
 		search_cache[query] = data
-	return {"message": "OK", "data": data}, 200
+	else:
+		print(f"Cache Hit: {query}")
+
+	async_tasks = []
+	results = []
+	for result in data:
+		cache_hit = video_data_cache.get(result["page_url"])
+		if cache_hit:
+			print(f"Cache Hit (video_data): {result['page_url']}")
+			results.append(cache_hit)
+		else:
+			async_tasks.append(asyncio.to_thread(scraper.get_video_data, result["page_url"]))
+
+	results += await asyncio.gather(*async_tasks)
+	for result in results:
+		if result["page_url"] not in video_data_cache:
+			video_data_cache[result["page_url"]] = result
+
+	return {"message": "OK", "data": results}, 200
 
 @app.route("/api/v2/searchone", methods=["GET"])
 def searchone_api(query=None):
@@ -585,7 +603,7 @@ def callback():
 		# things on behalf of a user
 		google_provider_cfg = get_google_provider_cfg()
 
-		# Prepare and send request to get tokens! Yay tokens!
+		# Prepare and send request to get tokens.
 		token_url, headers, body = client.prepare_token_request(
 			google_provider_cfg["token_endpoint"],
 			authorization_response=request.url,

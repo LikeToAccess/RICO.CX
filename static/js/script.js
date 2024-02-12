@@ -99,7 +99,7 @@ function handleSearchResponse(response) {
 		year     = result.year;
 		score    = result.score;
 		duration = result.duration;
-		quality  = result.quality;
+		quality  = result.quality_tag;
 		// page_url = result.page_url;
 		search_result = document.createElement("div");
 		search_result.setAttribute("class", "search-result");
