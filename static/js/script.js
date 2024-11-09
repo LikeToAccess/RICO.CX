@@ -94,9 +94,9 @@ function handleSearchResponse(response) {
 	results = json.data;
 	for (let i = 0; i < results.length; i++) {
 		result = results[i];
-		poster   = result.poster;
-		title    = result.readable_title;
-		year     = result.year;
+		poster   = result.poster_url;
+		title    = result.title;
+		year     = result.release_year;
 		score    = result.score;
 		duration = result.duration;
 		quality  = result.quality_tag;

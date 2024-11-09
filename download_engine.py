@@ -178,6 +178,13 @@ def main():
 	"""
 	# print(Download.get("test"))
 	download_engine = DownloadEngine()
+	# downloads = download_engine.downloads
+	# download_engine.create("Test",
+	#                        "https://soaper.tv/dev/Apis/tw_m3u8?key=qWKyq9jm1eiAprqAYQ98ijo7LdzPWNslv42r49OWTOPojWNEdZUNLeRzrRJ7tKlRZ1V71aUVw24Wq8BMhQY68bYVzXurAwMrZmQwC2Kvq6Z7JWIom9oLwm4V.m3u8",
+	#                        "ANYMOOSE",
+	#                        "HD")
+	# download_engine.queue.append({"url": "https://soaper.tv/dev/Apis/tw_m3u8?key=qWKyq9jm1eiAprqAYQ98ijo7LdzPWNslv42r49OWTOPojWNEdZUNLeRzrRJ7tKlRZ1V71aUVw24Wq8BMhQY68bYVzXurAwMrZmQwC2Kvq6Z7JWIom9oLwm4V.m3u8", "filename": "Test"})
+	# download_engine.start()
 	# print(download_engine.queue)
 	# Download.create("Guardians of the Galaxy Volume 3", "https://stream-1-1-ip4.loadshare.org/slice/12/VideoID-4zvQaoJr/IBeQKg/zE9XBp/neKcBj/lqRVCI/360?name=guardians-of-the-galaxy-volume-3_360&token=ip=65.128.170.255~st=1690168176~exp=1690182576~acl=/*~hmac=079efad49015ba896907d36524a9f2d354da5f4c7a2fbd8784db51e0d73744c8&source=207", "108802760954752258469")
 	# filename = Download.get("Guardians of the Galaxy Volume 3").filename

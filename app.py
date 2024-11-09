@@ -35,7 +35,7 @@ from timer import timer
 # from file import read_image
 # from format import Format
 from group import GroupMembership
-from scraper import Goojara as Scraper
+from scraper import Soaper as Scraper
 from database import init_db_command
 # from download import Download
 from download_engine import DownloadEngine
@@ -289,9 +289,11 @@ async def search_api(query=None):
 			async_tasks.append(asyncio.to_thread(scraper.get_video_data, result["page_url"]))
 
 	results += await asyncio.gather(*async_tasks)
-	for result in results:
+	for i, result in enumerate(results):
 		if result["page_url"] not in video_data_cache:
+			print(f"DEBUG: Adding {result['page_url']} to cache")
 			video_data_cache[result["page_url"]] = result
+		results[i].sanatize()  # Sanatize object for JSON serialization
 
 	return {"message": "OK", "data": results}, 200
 
@@ -428,7 +430,11 @@ def download_api(page_url: str | None = None) -> tuple[dict, int]:
 
 	library_path = category_mapping.get(video_data["catagory"], "MOVIES")
 
-	filename = os.path.join(ROOT_LIBRARY_LOCATION, library_path, video_data["title"] +".mp4.crdownload")
+	filename = os.path.join(
+		ROOT_LIBRARY_LOCATION,
+		library_path,
+		video_data["title"].replace(":", "") +".m3u8.crdownload")
+
 
 	download_engine = DownloadEngine()
 	downloads = download_engine.downloads
@@ -711,4 +717,4 @@ def get_google_provider_cfg():
 
 
 if __name__ == "__main__":
-	app.run(ssl_context="adhoc", debug=True)
+	app.run(ssl_context="adhoc", debug=True, port=9000)

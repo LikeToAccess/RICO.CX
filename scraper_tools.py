@@ -17,6 +17,7 @@ from collections.abc import Callable
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from tmdbv3api import TMDb, Search, Movie, TV  # type: ignore[import-untyped]
 
 from element_find import FindElement
@@ -38,6 +39,8 @@ class ScraperTools(WaitUntilElement, FindElement):
 		if not init:
 			return
 		tic = perf_counter()
+		capabilities = DesiredCapabilities.CHROME
+		capabilities['goog:loggingPrefs'] = {'performance': 'ALL'}
 		options = Options()
 		user_data_dir = os.path.abspath("selenium_data")
 		options.add_argument("--autoplay-policy=no-user-gesture-required")
@@ -67,6 +70,16 @@ class ScraperTools(WaitUntilElement, FindElement):
 		print("Redirecting to correct URL...")
 		self.open_link(url)
 		print(self.current_url())
+
+	def resume_video(self):
+		self.driver.execute_script(
+			"for(v of document.querySelectorAll('video')){v.setAttribute('muted','');v.play()}"
+		)
+
+	def pause_video(self):
+		self.driver.execute_script(
+			"videos = document.querySelectorAll('video'); for(video of videos) {video.pause()}"
+		)
 
 	def reload(self):
 		self.driver.refresh()
