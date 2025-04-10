@@ -11,7 +11,7 @@ RICO.GA but the letter A is replaced with a Q but the letter G is replaced with 
 * CHERRY: 404 - No results found (getvideo)
 * DRAGON: 225 - Captcha failed (captcha)
 * EAGLE:  500 - download.status is invalid (download_api)
-* FALCON: 
+* FALCON: 502 - Failed to communicate with the search service (search)
 * GUITAR: 
 * HAMMER: 
 * IGLOO:  

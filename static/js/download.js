@@ -16,25 +16,46 @@
 // 	}
 // }
 
-onItemClick = function (result) {
-	// encode result to be url safe
-	result = encodeURIComponent(JSON.stringify(result));
-	console.log(result);
-	httpPostAsync(API_HOST +":"+ API_PORT +"/api/v2/download?result="+ result, handleDownloadResponse);
-};
+// onItemClick = function (result) {
+// 	// encode result to be url safe
+// 	result = encodeURIComponent(JSON.stringify(result));
+// 	console.log(result);
+// 	httpPostAsync(API_HOST +":"+ API_PORT +"/api/v2/download?result="+ result, handleDownloadResponse);
+// };
+
+function removeAllChildNodes(parent) {
+    while (parent.firstChild) {
+        parent.removeChild(parent.firstChild);
+    }
+}
+
+function stopCardSpinner(id) {
+	var result = document.getElementById("id-"+ id);
+	var result_thumbnail = result.getElementsByClassName("result-thumbnail")[0];
+	if (result.lastChild.tagName == "DIV")
+		removeAllChildNodes(result.lastChild);
+}
 
 handleDownloadResponse = function (response) {
 	// response = JSON.parse(response.responseText);
 	const json = JSON.parse(response.responseText);
+	stopCardSpinner(json.id);
 	// Response is 200 or 201
 	if ([200, 201].includes(response.status)) {
 		console.log(json.message);
-		console.log(json.result);
+		console.log(json.video_data);
+		console.log(json.id);
+		startCardSpinner(json.id, "/static/img/check.svg");
+	} else if ([400, 500, 508].includes(response.status)) {
+		console.log(json.message);
+		console.log(json.video_data);
+		console.log(json.id);
+		startCardSpinner(json.id, "/static/img/error.svg");
 	}
-	if (response.status == 225) {
-		const captchaImage = json.data;
-		const page_url = json.page_url;
-		console.log("HTTP response status code: "+ response.status +"\n"+ json.message);
-		captchaPopUp(captchaImage, page_url);
-	}
+	// if (response.status == 225) {
+	// 	const captchaImage = json.data;
+	// 	const page_url = json.page_url;
+	// 	console.log("HTTP response status code: "+ response.status +"\n"+ json.message);
+	// 	captchaPopUp(captchaImage, page_url);
+	// }
 };

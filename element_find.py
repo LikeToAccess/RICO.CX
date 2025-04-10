@@ -50,3 +50,6 @@ class FindElement:
 def find_elements_by_xpath(html_string, sequence):
 	doc = lxml.html.fromstring(html_string)
 	return doc.xpath(sequence)
+
+def find_element_by_xpath(html_string, sequence):
+	return find_elements_by_xpath(html_string, sequence)[0]

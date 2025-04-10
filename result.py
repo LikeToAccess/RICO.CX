@@ -1,5 +1,7 @@
 import json
 
+from lxml.html import HtmlElement
+
 
 class Result(dict):
 	'''A class to hold the results of a search'''
@@ -8,19 +10,77 @@ class Result(dict):
 				 scraper_object,
 				 title,
 				 page_url,
+				 filename=None,
 				 release_year=None,
 				 description=None,
-				 poster_url=None,
-				 catagory="unknown"):
+				 poster_url="/static/img/missing_poster.svg",
+				 duration=0,
+				 catagory="unknown",
+				 **kwargs):
 		self.scraper_object = scraper_object
 		self.title = title
 		self.page_url = page_url
+		self.filename = title if filename is None else filename
 		self.release_year = release_year
 		self.description = description
 		self.poster_url = poster_url
 		self.catagory = catagory
+		self.duration = duration
 		self._video_url = None
+		for key, value in kwargs.items():
+			setattr(self, key, value)
 		super().__init__(self.__dict__)
+
+	class remove:
+		def __init__(self, results: list):
+			self.results = results
+			self.results = self.codecs(self.results)
+			self.results = self.bad_characters(self.results)
+
+		@staticmethod
+		def codecs(results: list) -> list:
+			"""
+			Filters out results with unwanted video codecs in the title.
+
+			Args:
+				results (list[Result]): The list of results
+
+			Returns:
+				list[Result]: The filtered list of results
+			"""
+			unwanted_codecs = ["x265", "h.265", "h265", "hevc", "av1"]  # Add more codecs as needed
+			unwanted_other = ["hindi"]
+
+			filtered_results = []
+			for result in results:
+				match result:
+					case HtmlElement():
+						title = result.text_content().lower()
+					case dict() | Result():
+						title = result.get("original_title", str()).lower()
+					case str() | _:
+						title = result.lower()
+				# print(f"DEBUG: {title} (title)")
+				if not any(codec in title for codec in unwanted_codecs+unwanted_other):
+					filtered_results.append(result)
+
+			# Print number of results filtered:
+			number_removed = len(results) - len(filtered_results)
+			print(f"\tINFO: {number_removed} HEVC/H.265/AV1 item", end="s " if number_removed != 1 else " ")
+			print("filtered from results.")
+			return filtered_results
+
+		@staticmethod
+		def bad_characters(titles: str | list) -> list:
+			"""Removes bad characters from a title"""
+			if not isinstance(titles, list):
+				titles = [titles]
+			for title in titles:
+				bad_characters = ["/", "\\", "\"", ":"]
+				for char in bad_characters:
+					title.text = title.text.replace(char, "").encode("ascii", "ignore").decode("ascii").strip()
+
+			return titles
 
 	def __str__(self):
 		dict_copy = self.__dict__.copy()
@@ -52,6 +112,7 @@ class Result(dict):
 
 		# Update the underlying dictionary since it's a dict subclass
 		self.pop("scraper_object", None)
+		return self.__dict__
 
 	def __bool__(self):
 		return bool(self.page_url)

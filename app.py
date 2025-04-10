@@ -35,7 +35,7 @@ from timer import timer
 # from file import read_image
 # from format import Format
 from group import GroupMembership
-from scraper import Soaper as Scraper
+from scraper import X1337 as Scraper
 from database import init_db_command
 # from download import Download
 from download_engine import DownloadEngine
@@ -251,51 +251,51 @@ def banned():
 	print("DEBUG: Not Banned")
 	return redirect(url_for("index"))
 
-# @timer
-@app.route("/api/v2/search", methods=["GET"])
-async def search_api(query=None):
-	"""
-	Search for movies.
+# # @timer
+# @app.route("/api/v2/search", methods=["GET"])
+# async def search_api(query=None):
+# 	"""
+# 	Search for movies.
 
-	Args:
-		query (str): The query to search for. This can also be a movie URL.
+# 	Args:
+# 		query (str): The query to search for. This can also be a movie URL.
 
-	Returns:
-		200: OK
-		400: No query provided
-		404: No results found
-	"""
-	# Checks if query or q arguments were provided (q takes priority over query)
-	query = (next(request.args.get(arg, query) for arg in ["q", "query"]) or "").lower().strip()
-	if not query: return {"message": "No query provided\nPlease report error code: BANJO"}, 400
+# 	Returns:
+# 		200: OK
+# 		400: No query provided
+# 		404: No results found
+# 	"""
+# 	# Checks if query or q arguments were provided (q takes priority over query)
+# 	query = (next(request.args.get(arg, query) for arg in ["q", "query"]) or "").lower().strip()
+# 	if not query: return {"message": "No query provided\nPlease report error code: BANJO"}, 400
 
-	# Check/Update cache
-	if not (data := search_cache.get(query)):
-		data = scraper.search(query)
-		if not data:
-			return {"message": "No results found"}, 404
-		search_cache[query] = data
-	else:
-		print(f"Cache Hit: {query}")
+# 	# Check/Update cache
+# 	if not (data := search_cache.get(query)):
+# 		data = scraper.search(query)
+# 		if not data:
+# 			return {"message": "No results found"}, 404
+# 		search_cache[query] = data
+# 	else:
+# 		print(f"Cache Hit: {query}")
 
-	async_tasks = []
-	results = []
-	for result in data:
-		cache_hit = video_data_cache.get(result["page_url"])
-		if cache_hit:
-			print(f"Cache Hit (video_data): {result['page_url']}")
-			results.append(cache_hit)
-		else:
-			async_tasks.append(asyncio.to_thread(scraper.get_video_data, result["page_url"]))
+# 	async_tasks = []
+# 	results = []
+# 	for result in data:
+# 		cache_hit = video_data_cache.get(result["page_url"])
+# 		if cache_hit:
+# 			print(f"Cache Hit (video_data): {result['page_url']}")
+# 			results.append(cache_hit)
+# 		else:
+# 			async_tasks.append(asyncio.to_thread(scraper.get_video_data, result["page_url"]))
 
-	results += await asyncio.gather(*async_tasks)
-	for i, result in enumerate(results):
-		if result["page_url"] not in video_data_cache:
-			print(f"DEBUG: Adding {result['page_url']} to cache")
-			video_data_cache[result["page_url"]] = result
-		results[i].sanatize()  # Sanatize object for JSON serialization
+# 	results += await asyncio.gather(*async_tasks)
+# 	for i, result in enumerate(results):
+# 		if result["page_url"] not in video_data_cache:
+# 			print(f"DEBUG: Adding {result['page_url']} to cache")
+# 			video_data_cache[result["page_url"]] = result
+# 		results[i].sanatize()  # Sanatize object for JSON serialization
 
-	return {"message": "OK", "data": results}, 200
+# 	return {"message": "OK", "data": results}, 200
 
 @app.route("/api/v2/searchone", methods=["GET"])
 def searchone_api(query=None):
@@ -374,51 +374,90 @@ async def popular_api():
 	else:
 		popular = cache_hit
 		print("Cache Hit: _popular")
-	async_tasks = []
-	results = []
-	for result in popular:
-		cache_hit = video_data_cache.get(result["page_url"])
-		if cache_hit:
-			print(f"Cache Hit (video_data): {result['page_url']}")
-			results.append(cache_hit)
-		else:
-			async_tasks.append(asyncio.to_thread(scraper.get_video_data, result["page_url"]))
+	# async_tasks = []
+	# results = []
+	# for result in popular:
+	# 	cache_hit = video_data_cache.get(result["page_url"])
+	# 	if cache_hit:
+	# 		print(f"Cache Hit (video_data): {result['page_url']}")
+	# 		results.append(cache_hit)
+	# 	else:
+	# 		async_tasks.append(asyncio.to_thread(scraper.get_video_data, result["page_url"]))
 
-	results += await asyncio.gather(*async_tasks)
-	for result in results:
-		if result["page_url"] not in video_data_cache:
-			video_data_cache[result["page_url"]] = result
+	# results += await asyncio.gather(*async_tasks)
+	# for result in results:
+	# 	if result["page_url"] not in video_data_cache:
+	# 		video_data_cache[result["page_url"]] = result
+	results = popular
 
-	return {"message": "OK", "data": results}, 200
+	print(results)
+	# return {"message": "OK", "data": [{"testing":"test"}]}, 200
+	return {"message": "OK", "data": [result.sanatize() for result in results]}, 200
+
+@app.route("/api/v2/search", methods=["GET"])
+def search_api(query=None):
+	"""
+	Search for movies.
+
+	Args:
+		query (str): The query to search for. This can also be a movie URL, infohash, or magnet link.
+
+	Returns:
+		200: OK
+		400: No query provided
+		404: No results found
+		502: Failed to connect to the search service
+	"""
+	query = query if query else request.args.get("q", str())
+	query = query.lower().strip()
+	if not query:
+		return {"message": "No query provided\nPlease report error code: BANJO"}, 400
+
+	if not (results := search_cache.get(query)):
+		try:
+			results = scraper.search(query)
+		except requests.exceptions.ConnectionError as e:
+			print(f"Connection error during search: {e}")
+			return {"message": "Failed to connect to search service\nPlease report error code: FALCON"}, 502
+		if not results:
+			return {"message": "No results found"}, 404
+		search_cache[query] = results
+	else:
+		print(f"Cache Hit: {query}")
+
+	return {"message": "OK", "data": [result.sanatize() for result in results]}, 200
 
 @app.route("/api/v2/download", methods=["POST"])
-def download_api(page_url: str | None = None) -> tuple[dict, int]:
+def download_api(page_url: str | None = None, id: int | None = None) -> tuple[dict, int]:
 	"""
 	Download video file from a page_url.
 
 	Args:
 		page_url (str): The url of the movie or show
+		id (int): The id result
 
 	Returns:
 		200: The video is already in queue.
 		201: The video was downloaded successfully.
 		400: No page_url was provided.
+		500: Unknown status.
 		508: Failed to download the video.
 
 	"""
 	page_url = page_url if page_url else request.args.get("page_url")
+	result_id = id if id else request.args.get("id")
 	if page_url is None:
-		return {"message": "No page_url provided\nPlease report error code: BANANA"}, 400
+		return {"message": "No page_url provided\nPlease report error code: BANANA", "id": result_id}, 400
 
 	if not (video_url := video_url_cache.get(page_url)):
 		if not (video_url := scraper.get_video_url(page_url)):
-			return {"message": "Failed to get video url\nPlease report error code: AVATAR"}, 508
+			return {"message": "Failed to get video url\nPlease report error code: AVATAR", "id": result_id}, 508
 		video_url_cache[page_url] = video_url
 
 	video_data = video_data_cache.get(page_url)
 	if not (video_data := video_data_cache.get(page_url)):
 		if not (video_data := scraper.get_video_data(page_url)):
-			return {"message": "Failed to get video data\nPlease report error code: ASTRO"}, 508
+			return {"message": "Failed to get video data\nPlease report error code: ASTRO", "id": result_id}, 508
 		video_data_cache[page_url] = video_data
 
 	category_mapping = {
@@ -428,13 +467,14 @@ def download_api(page_url: str | None = None) -> tuple[dict, int]:
 		"episode": "TV SHOWS/",
 	}
 
-	library_path = category_mapping.get(video_data["catagory"], "MOVIES")
+	library_path = category_mapping.get(video_data["catagory"], "MOVIES/")  # default is MOVIES/
+
+	# print(f"DEBUG: {video_data} (video_data)")  # video_data is wrong here (FIXED?)
 
 	filename = os.path.join(
 		ROOT_LIBRARY_LOCATION,
 		library_path,
-		video_data["title"].replace(":", "") +".m3u8.crdownload")
-
+		video_data["filename"].replace(":", "") +".crdownload")  # : filtering should be unnecessary
 
 	download_engine = DownloadEngine()
 	downloads = download_engine.downloads
@@ -451,14 +491,16 @@ def download_api(page_url: str | None = None) -> tuple[dict, int]:
 			match download.status:
 				case "downloading":
 					print("DEBUG: Already in queue")
-					return {"message": "Already in queue", "video_data": video_data}, 200
+					return {"message": "Already in queue", "video_data": video_data.sanatize(), "id": result_id}, 200
 				case "initializing":
 					print("DEBUG: Download is initializing")
-					return {"message": "Download is initializing", "video_data": video_data}, 200
+					return {"message": "Download is initializing", "video_data": video_data.sanatize(), "id": result_id}, 200
 				case "finished":
-					if os.path.exists(download.filename):
+					if os.path.exists(download.filename.rsplit(".crdownload", 1)[0]):
 						print("DEBUG: Already downloaded")
-						return {"message": "Already downloaded", "video_data": video_data}, 200
+						return {"message": "Already downloaded", "video_data": video_data.sanatize(), "id": result_id}, 200
+					print(f"DEBUG: download.filename: {download.filename}")
+					print(f"DEBUG: filename: {filename}")
 					print("DEBUG: Download was finished but file is missing, retrying...")
 					download.delete()
 				case "failed":
@@ -469,15 +511,21 @@ def download_api(page_url: str | None = None) -> tuple[dict, int]:
 					download.delete()
 				case _:
 					print(f"DEBUG: {download.status} is not a valid known status for {filename}")
-					return {"message": f"{download.status} is not a valid known status\nPlease report error code: EAGLE"}, 500
+					return {"message": f"{download.status} is not a valid known status\nPlease report error code: EAGLE", "id": result_id}, 500
 			break
-	user_id = current_user.id if current_user.is_authenticated else "ANYMOOSE"
+	user_id = current_user.id if current_user.is_authenticated else "ANYMOOSE"  # -kyrakyrakyrakyra
 	download_engine.create(filename, video_url, user_id, download_quality=video_data.get("quality_tag"))
 	download_engine.queue.append({"url": video_url, "filename": filename})
 	download_engine.start()
-	os.rename(filename, filename.rsplit(".crdownload", 1)[0])
+	try:
+		if os.path.exists(filename):
+			print("DEBUG: Already downloaded, but database is out of sync.")
+			return {"message": "Already downloaded", "video_data": video_data.sanatize(), "id": result_id}, 200
+		os.rename(filename, filename.rsplit(".crdownload", 1)[0])  # TODO: This should be moved to download_engine.py
+	except FileNotFoundError:
+		pass
 
-	return {"message": "OK", "video_data": video_data, "video_url": video_url}, 200
+	return {"message": "OK", "video_data": video_data.sanatize(), "video_url": video_url, "id": result_id}, 201
 
 # @app.route("/api/v1/download", methods=["POST"])
 # def download_api_old(page_url=None):

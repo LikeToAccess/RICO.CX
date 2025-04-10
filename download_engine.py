@@ -18,6 +18,10 @@ from tqdm import tqdm
 
 from download import Download
 from settings import *
+from realdebrid import RealDebrid
+
+
+rd = RealDebrid(REAL_DEBRID_API_KEY)
 
 
 class DownloadEngine(Download):
@@ -122,6 +126,17 @@ class DownloadEngine(Download):
 		filename = self.queue[position]["filename"]
 		# queue.remove({"url": url, "filename": filename})
 		# queue.pop(position)
+
+		# If url is a magnet link, we need to get the remote file size using real-debrid.
+		if url.startswith("magnet:?"):
+			# Test Download: magnet:?xt=urn:btih:1956E238E5D115A29DB662A8BC5D407757C7717B
+			print("\tINFO: Converting magnet URL to TCP with real-debrid API...")
+			remote_file_size = 1024  # TODO
+			# In this section we need to uptdate the url variable to the TCP link from real-debrid.
+			url = rd.get_unrestricted_video_link(url)[0]
+			self.queue[position]["url"] = url
+
+
 		request = requests.head(url, timeout=120, allow_redirects=True)
 		if request.status_code == 404:
 			if retry_count < self.max_retries:
@@ -137,28 +152,46 @@ class DownloadEngine(Download):
 		remote_file_size = int(request.headers.get("content-length", 0))
 		# filename = url.split("?name=")[1].split("&token=ip=")[0] + ".mp4"
 
+		if os.path.exists(filename.rsplit(".crdownload", 1)[0]):
+			local_file_size = os.path.getsize(filename.rsplit(".crdownload", 1)[0])
+			if local_file_size != remote_file_size:
+				print("\tLocal file is complete, but does not match remote file. Downloading from scratch...")
+				os.remove(filename.rsplit(".crdownload", 1)[0])
+			else:
+				print("\tLocal file is complete, skipping...")
+				self.update(filename, download_status="finished")
+				if self.get(filename).size != remote_file_size:
+					self.update(filename, download_size=remote_file_size)
+				self.queue.remove({"url": url, "filename": filename})
+				return True
+
 		if os.path.exists(filename):
 			local_file_size = os.path.getsize(filename)
 
+			# Local file is larger than expected, something went wrong. Delete the file and restart.
 			if local_file_size > remote_file_size:
 				print("\tWARNING: Local file is larger than remote file, deleting local file and starting download from scratch...")
 				os.remove(filename)
 				return self.downloader(position)
+			# Local file does not exactly match the remote file. Check if something went wrong, or resume.
 			if remote_file_size != local_file_size:
 				for index, item in enumerate(self.queue.copy()):
 					print(f"DEBUG: {index} (index)\nDEBUG: {position} (position)")
+					# Duplicate filename found in the queue, removing newest download from the queue.
 					if item["filename"] == filename and self.queue[index] is not self.queue[position]:
 						self.queue.remove(item)
 						print("\tWARNING: Duplicate file found in queue, duplicate file has been removed.")
 						return False
 				print(f"\tFile is incomplete, resuming download... ({local_file_size} of {remote_file_size} bytes downloaded)")
 				return self.downloader(position, local_file_size)
+			# Local file exactly matches the remote file. Removing download from the queue, and adding to DB.
 			print("\tFile is complete, download skipped.")
 			self.update(filename, download_status="finished")
 			if self.get(filename).size != remote_file_size:
 				self.update(filename, download_size=remote_file_size)
 			self.queue.remove({"url": url, "filename": filename})
 			return True
+		# Local file does not exist in the path expected. Starting download process.
 		print("\tFile does not yet exist, starting download...")
 		return self.downloader(position)
 

@@ -23,11 +23,14 @@ from selenium.common.exceptions import TimeoutException
 
 from timer import timer
 from result import Result
-from element_find import find_elements_by_xpath
-from scraper_tools import ScraperTools, TMDbTools, goto_homepage
+from realdebrid import RealDebrid
+from element_find import find_elements_by_xpath, find_element_by_xpath
+from scraper_tools import ScraperTools, TMDbTools, goto_homepage, FileBot
 
 
 tmdb = TMDbTools()
+fb = FileBot()
+rd = RealDebrid()
 
 
 class Goojara(ScraperTools):
@@ -473,29 +476,171 @@ class Null(ScraperTools):
 # 	def __init__(self):
 # 		super(ScraperTools).__init__(self)
 
-class X1337(ScraperTools):
+# class X1337(ScraperTools):
+class X1337:
+
+	def __init__(self):
+		self.homepage_url = "https://1337x.to"
+		self.popular_url = "https://1337x.to/sub/54/0/"
+		self.search_url = "https://1337x.to/search/"  # searches require a user agent
+		self.search_url_movies = "https://1337x.to/category-search/{}/Movies/"
+		self.search_url_tv = "https://1337x.to/category-search/{}}/TV/"
+		self.headers = {"User-Agent": "Mozilla/5.0"}
+		# self.search_results = []
+
+	def _get_results_from_request(self, request: requests.Response) -> list[Result]:
+		"""
+		Convenience function to convert the request into a list of Result objects
+
+		Args:
+			request (requests.Response): The request object
+
+		Returns:
+			list[Result]: A list of Result objects
+		"""
+		# print(request.url)
+		results = find_elements_by_xpath(request.text, '//td/a[contains(@href, "/torrent/")]')
+		results = Result.remove.codecs(results)
+		results = Result.remove.bad_characters(results)
+		results = fb.get_names([{
+				"filename":result.text,
+				"original_title":result.text,
+				"page_url":self.homepage_url+result.get("href")
+			} for result in results])
+		# print(results)
+		for index, result in enumerate(results):
+			if result.get("tmdb_id") is None:
+				continue
+			result_data = tmdb.details_movie(result["tmdb_id"])
+			# print(result_data)
+			if result_data.get("poster_path") is not None:
+				results[index]["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+			if result_data.get("runtime") is not None:
+				results[index]["duration"] = result_data["runtime"]
+			if result_data.get("vote_average") is not None:
+				results[index]["score"] = f"{result_data['vote_average']/10:.0%}"
+
+		# result_count = len(results)
+		# results = Result.filter_codecs(results)
+		# results_removed = result_count - len(results)
+		# print(f"\tINFO: {results_removed}x HEVC/H.265 item", end="s " if results_removed != 1 else " ")
+		# print("filtered from results.")
+		return [Result(scraper_object=self, **result) for result in results]
 
 	@timer
-	def search(self, query: str, timeout: int = 10) -> list[dict]:
-		request = requests.get("https://1337x.to/sub/54/0/")
-		results = find_elements_by_xpath(request.text, '//td/a[contains(@href, "/torrent/")]')
+	def search(self, query: str, timeout: int = 10, catagory="movie") -> list[Result]:
+		"""
+		Searches for a movie or show
+
+		Args:
+			query (str): The movie or show to search for
+			timeout (int, optional): The timeout for the search. Defaults to 10.
+
+		Returns:
+			list[dict]: A list of dictionaries containing the title, year, and page_url
+		"""
+		# print(f"Searching for {query}...")
+		match catagory:
+			case "movie":
+				url = self.search_url_movies.format(urllib.parse.quote_plus(query)) +"1/"  # 1/ is the page number
+			case "tv":
+				url = self.search_url_tv.format(urllib.parse.quote_plus(query)) +"1/"  # 1/ is the page number
+			case _:  # default
+				url = self.search_url + urllib.parse.quote_plus(query) +"/1/"  # /1/ is the page number
+		# try:
+		# 	request = requests.get(url, headers=self.headers, timeout=timeout)
+		# except requests.exceptions.ConnectionError as e:
+		# 	print(f"ERROR: Connection error while searching for '{query}' on host '{self.homepage_url}': {e}")
+		# 	return []
+		# print(f"DEBUG: {url} (url)")
+		request = requests.get(url, headers=self.headers, timeout=timeout)
+		# print(f"DEBUG: {request.text} (request.text)")
+		results = self._get_results_from_request(request)
+
 		return results
+
+	@timer
+	def popular(self, timeout: int = 10) -> list[Result]:
+		"""
+		Gets the top 80 popular movies and tv episodes
+
+		Args:
+			timeout (int, optional): The timeout for the search. Defaults to 10.
+
+		Returns:
+			list[dict]: A list of dictionaries containing the title, year, and page_url
+		"""
+		request = requests.get(self.popular_url, timeout=timeout)
+		results = self._get_results_from_request(request)
+
+		return results
+
+	def get_video_data(self, page_url):
+		# video_data = Result(
+		# 	scraper_object=self,
+		# 	title="Flushed Away",
+		# 	release_year="2006",
+		# 	description="Flushed Away!",
+		# 	page_url=page_url,
+		# 	poster_url="https://en.wikipedia.org/wiki/Cheese",
+		# 	catagory="Drama",
+		# )
+
+		# TODO: need to get the Filename from the page_url
+		request = requests.get(page_url, timeout=10)
+		# XPATH: //div[contains(@id, "mCSB_1_container")]/h3/a
+		# title = find_element_by_xpath(
+		# 	request.text, '//div[contains(@id, "mCSB_1_container")]/h3/a').text
+		infohash = find_element_by_xpath(
+			request.text, '//div[contains(@class, "infohash-box")]/p/span').text
+
+		torrent_id = rd.add_magnet(infohash)
+		filename = rd.get_filename(torrent_id)
+		rd.remove_torrent(torrent_id)
+
+		result = fb.get_name(filename)
+		if not result.get("tmdb_id"):
+			print(f"WARNING: Could not find {filename} on TMDb.")
+			print(f"DEBUG: {result} (result)")
+			return result
+		print(f"DEBUG: {result["tmdb_id"]} (tmdb_id)")
+		result_data = tmdb.details_movie(result["tmdb_id"])
+		if result_data.get("poster_path") is not None:
+			result["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+		if result_data.get("runtime") is not None:
+			result["duration"] = result_data["runtime"]
+
+		video_data = Result(
+			scraper_object=self,
+			page_url=page_url,
+			**result)
+		print(f"DEBUG: {video_data} (video_data) (type={type(video_data)})")
+
+		return video_data
+
+	def get_video_url(self, page_url: str, timeout: int = 10):
+		"""Gets magnet link from page_url"""
+		request = requests.get(page_url, timeout=timeout)
+		infohash = find_element_by_xpath(
+			request.text, '//div[contains(@class, "infohash-box")]/p/span').text
+		magnet_url = "magnet:?xt=urn:btih:"+ infohash
+		print(f"DEBUG: {magnet_url}")
+		return magnet_url
 
 
 def main():
 	print("Starting scraper...")
-	scraper = Soaper()
+	scraper = X1337()
 	# scraper.open_link("https://soaper.tv/movie_3d8kdr0gY9.html")
 	# print(scraper.html)
 	# print(scraper.get_video_url("https://soaper.tv/movie_5Wk53Mxg1m.html"))
-	results = scraper.search("independence day")
+	results = scraper.popular()
 	# print(json.dumps(results, indent=2))
 	# print(len(results))
 	# scraper.get_video_url(results[0]["page_url"])
-	print(results[0])
-	print(results[0].video_url)
-	print(results[0])
-	scraper.close()
+	for result in results:
+		print(result)
+	# scraper.close()
 	print("Scraper closed.")
 
 
