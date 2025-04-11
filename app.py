@@ -152,6 +152,13 @@ def index(video_url=None):
 		group=group,
 		video_url=video_url
 	)
+ 
+@app.route('/static/js/settings.js')
+def serve_settings_js():
+    return render_template_string(
+        open('static/js/settings.js.template').read(),
+        debug_mode=DEBUG_MODE
+    )
 
 @app.route("/search")
 @app.route("/search/<query>")
