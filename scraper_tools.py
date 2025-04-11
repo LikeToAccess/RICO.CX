@@ -98,10 +98,13 @@ class ScraperTools(WaitUntilElement, FindElement):
 class FileBot:
 
 	def __init__(self):
-		if os.listdir("temp"):
-			print("Clearing FileBot temp folder...")
-			for file in os.listdir("temp"):
-				os.remove(f"temp/{file}")
+		try:
+			if os.listdir("temp"):
+				print("Clearing FileBot temp folder...")
+				for file in os.listdir("temp"):
+					os.remove(f"temp/{file}")
+		except FileNotFoundError:
+			os.mkdir("temp")
 		try:
 			subprocess.run(["filebot", "-version"], check=True)
 			print("FileBot initialized.")

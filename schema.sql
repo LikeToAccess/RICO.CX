@@ -51,4 +51,5 @@ INSERT INTO main.groups (group_id, group_name) VALUES
 	("1", "Administrators"),
 	("2", "Moderators");
 INSERT INTO main.group_members (group_id, user_id) VALUES
+	("1", "103686541999087786295"), -- anelson0421216@gmail.com
 	("1", "108802760954752258469"); -- igeussbill@gmail.com
