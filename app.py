@@ -515,49 +515,50 @@ def download_api(
 	download_engine = DownloadEngine()
 	downloads = download_engine.downloads
 	# Check if the video is already in the queue
-	for download in downloads:
-		if filename in download.filename:
-			# The download was started but never finished due to a server restart
-			if download.status in ["downloading", "initializing"] and download.last_updated < server_init_time:
-				print(f"DEBUG: {filename} was started but never finished, resuming...")
-				download.delete()
-				break
-			match download.status:
-				case "downloading":
-					print("DEBUG: Already in queue")
-					return {
-						"message": "Already in queue",
-						"video_data": video_data.sanatize(),
-						"id": result_id}, 200
-				case "initializing":
-					print("DEBUG: Download is initializing")
-					return {
-						"message": "Download is initializing",
-						"video_data": video_data.sanatize(),
-						"id": result_id}, 200
-				case "finished":
-					if os.path.exists(os.path.join(ROOT_LIBRARY_LOCATION, download.filename.rsplit(".crdownload", 1)[0])):
-						print("DEBUG: Already downloaded")
+	if downloads is not None:
+		for download in downloads:
+			if filename in download.filename:
+				# The download was started but never finished due to a server restart
+				if download.status in ["downloading", "initializing"] and download.last_updated < server_init_time:
+					print(f"DEBUG: {filename} was started but never finished, resuming...")
+					download.delete()
+					break
+				match download.status:
+					case "downloading":
+						print("DEBUG: Already in queue")
 						return {
-							"message": "Already downloaded",
+							"message": "Already in queue",
 							"video_data": video_data.sanatize(),
 							"id": result_id}, 200
-					print(f"DEBUG: download.filename: {download.filename}")
-					print(f"DEBUG: filename: {filename}")
-					print("DEBUG: Download was finished but file is missing, retrying...")
-					download.delete()
-				case "failed":
-					print(f"DEBUG: {filename} failed to download, retrying...")
-					download.delete()
-				case "not_started":
-					print(f"DEBUG: {filename} was queued but never started ({download.last_updated}), retrying...")
-					download.delete()
-				case _:
-					print(f"DEBUG: {download.status} is not a valid known status for {filename}")
-					return {
-						"message": f"{download.status} is not a valid known status\nPlease report error code: EAGLE",
-						"id": result_id}, 500
-			break
+					case "initializing":
+						print("DEBUG: Download is initializing")
+						return {
+							"message": "Download is initializing",
+							"video_data": video_data.sanatize(),
+							"id": result_id}, 200
+					case "finished":
+						if os.path.exists(os.path.join(ROOT_LIBRARY_LOCATION, download.filename.rsplit(".crdownload", 1)[0])):
+							print("DEBUG: Already downloaded")
+							return {
+								"message": "Already downloaded",
+								"video_data": video_data.sanatize(),
+								"id": result_id}, 200
+						print(f"DEBUG: download.filename: {download.filename}")
+						print(f"DEBUG: filename: {filename}")
+						print("DEBUG: Download was finished but file is missing, retrying...")
+						download.delete()
+					case "failed":
+						print(f"DEBUG: {filename} failed to download, retrying...")
+						download.delete()
+					case "not_started":
+						print(f"DEBUG: {filename} was queued but never started ({download.last_updated}), retrying...")
+						download.delete()
+					case _:
+						print(f"DEBUG: {download.status} is not a valid known status for {filename}")
+						return {
+							"message": f"{download.status} is not a valid known status\nPlease report error code: EAGLE",
+							"id": result_id}, 500
+				break
 	user_id = current_user.id if current_user.is_authenticated else "ANYMOOSE"  # -kyrakyrakyrakyra
 	if download_engine.get(filename) and os.path.exists(full_filename):
 		print("DEBUG: Already downloaded.")
