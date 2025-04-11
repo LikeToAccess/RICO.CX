@@ -515,10 +515,8 @@ def download_api(
 	download_engine = DownloadEngine()
 	downloads = download_engine.downloads
 	# Check if the video is already in the queue
-	if downloads is not None:
-		for download in downloads:
-			if filename not in download.filename:
-				continue
+	for download in downloads:
+		if filename in download.filename:
 			# The download was started but never finished due to a server restart
 			if download.status in ["downloading", "initializing"] and download.last_updated < server_init_time:
 				print(f"DEBUG: {filename} was started but never finished, resuming...")
