@@ -1,7 +1,8 @@
 # Sensitive data
 .env
-*.pem
-*.key
+
+# Temp
+temp/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
