@@ -338,22 +338,22 @@ function createProfileDropdownMenu(profile_pic, profile_name, group_name) {
 	var profileDropdownInfo = document.createElement("div");
 	var profileDropdownImg = document.createElement("img");
 	var profileDropdownName = document.createElement("p");
-	var profileDropdownLink1 = document.createElement("a");
+	var profileDropdownLogout = document.createElement("a");
 
 	profileDropdownMenu.setAttribute("class", "dropdown");
 	profileDropdownContent.setAttribute("class", "dropdown-content");
 	profileDropdownInfo.setAttribute("class", "profile-dropdown-info");
-	profileDropdownLink1.setAttribute("href", "logout");
+	profileDropdownLogout.setAttribute("href", "logout");
 
 	profileDropdownImg.setAttribute("src", profile_pic);
 	profileDropdownName.innerText = profile_name;
-	profileDropdownLink1.innerText = "Logout";
+	profileDropdownLogout.innerText = "Logout";
 
 	profileDropdownMenu.appendChild(profileDropdownContent);
 	profileDropdownContent.appendChild(profileDropdownInfo);
 	profileDropdownInfo.appendChild(profileDropdownImg);
 	profileDropdownInfo.appendChild(profileDropdownName);
-	profileDropdownContent.appendChild(profileDropdownLink1);
+	profileDropdownContent.appendChild(profileDropdownLogout);
 	// console.log(group_name);
 	if (["Moderators", "Administrators", "Root"].includes(group_name)) {
 		var profileDropdownLink2 = document.createElement("a");
