@@ -152,7 +152,7 @@ function handleSearchResponse(response) {
 		// result   = results[i];
 		poster   = result.poster_url;
 		title    = result.title;
-		subtitle = result.original_title;
+		subtitle = result.filename_old;
 		year     = result.release_year;
 		score    = result.score;
 		duration = result.duration;

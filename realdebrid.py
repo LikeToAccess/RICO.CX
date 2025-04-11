@@ -3,6 +3,11 @@ import requests
 
 from settings import REAL_DEBRID_API_KEY  # Import API key from the settings file
 
+class RealDebridAPIError(Exception):
+	"""Custom exception for Real-Debrid API errors."""
+
+class RealDebridInfringingError(Exception):
+	"""Custom exception for Real-Debrid API errors."""
 
 class RealDebrid:
 	"""
@@ -41,9 +46,9 @@ class RealDebrid:
 		response = requests.request(method, url, headers=headers, data=data, timeout=self.timeout)
 		print(response.status_code)
 		if response.status_code == 403:
-			raise Exception("Real-Debrid API key is invalid.")
+			raise RealDebridAPIError("Real-Debrid API key is invalid.")
 		if response.status_code == 503:
-			raise Exception("Error, likely infringing torrent.")
+			raise RealDebridInfringingError("Error, likely infringing torrent.")
 		response.raise_for_status()
 		return response.json() if response.text else {}
 

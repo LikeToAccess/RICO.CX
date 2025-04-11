@@ -15,6 +15,12 @@
 # Because of this, the "--disable-gpu" flag is also enabled when HEADLESS is
 # set to True.
 # The default value is True.
+
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load variables from .env
+
 HEADLESS = True
 
 # Sets the IP/Domain Name and port to bind the API to, the API will only be
@@ -26,14 +32,18 @@ PORT = 9000
 # Enables API serving via Flask instead of Waitress. Also disables downloading
 # full media and skips verification checks.
 # The default value is False.
-DEBUG_MODE = True
+DEBUG_MODE = bool(os.getenv("DEBUG_MODE"))
 USE_RELOADER = False
 
 # External API key for The Movie Database's offical API. The tmdbv3api Python
 # library is used to interact with TMDb's API to insert TMDb IDs into the
 # filenames.
 # The default value is False.
-TMDB_API_KEY = "a524c0fd2eaafa0e4288058506baf835"
+TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+
+# real-debrid API key for downloading torrents.
+# The default value is False.
+REAL_DEBRID_API_KEY = os.getenv("REAL_DEBRID_API_KEY")
 
 # Countries whose content is banned from being downloaded. This is a list of
 # country codes, for example: ["US", "CA", "GB"].
@@ -43,15 +53,24 @@ BANNED_COUNTRIES = ["PH"]
 # Root download directory, this will set the download location for all
 # media.
 # The default value is "../".
-ROOT_LIBRARY_LOCATION = "C:/Users/User/Desktop/"
-# ROOT_LIBRARY_LOCATION = "/Users/ian/Desktop/"
+# ROOT_LIBRARY_LOCATION = "C:/Users/User/Desktop/"
+ROOT_LIBRARY_LOCATION = os.getenv("ROOT_LIBRARY_LOCATION")
+# ROOT_LIBRARY_LOCATION = "~/Desktop/"
 
 # Google API credentials, used for Google OAuth2 authentication.
 # The default values are False.
-GOOGLE_CLIENT_ID = "788220717359-mqsrau2lmb85l94f68febkpb8fnbgj82.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET = "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"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 GOOGLE_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
 # Discord API credentials, used for Discord OAuth2 authentication.
 # The default value is False.
-DISCORD_BOT_TOKEN = "Nzc2NjgxMzA4MjIyOTE0NTgw.G-yf8a.GtFAFIzGPvjw-tG5kye2dEJcGQCR1Zd_n25Eq4"
+DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
+
+# Conditional host and port settings
+if DEBUG_MODE:
+    HOST = "127.0.0.1"  # Local development
+    PORT = 9000
+else:
+    HOST = "0.0.0.0"    # Production (accepts connections from any IP)
+    PORT = 443          # Standard HTTPS port

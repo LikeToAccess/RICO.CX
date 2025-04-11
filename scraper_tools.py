@@ -33,6 +33,42 @@ def goto_homepage(function: Callable) -> Callable:
 			return result
 		return wrapper
 
+def get_quality_tag(filename: dict[str, str]) -> str:
+	if filename.get("quality_tag") is not None:
+		print(f"DEBUG: {filename['filename']} already has a quality tag of '{filename['quality_tag']}'")
+		return filename["quality_tag"]
+	match filename["filename_old"]:
+		case title if "hdcam" in title.lower() \
+		or "camrip" in title.lower() \
+		or "hd-ts" in title.lower() \
+		or ".ts." in title.lower() \
+		or "hdts" in title.lower() \
+		or "hd cam" in title.lower() \
+		or " ts " in title.lower():
+			filename["quality_tag"] = "CAM"
+		case title if "2160p" in title.lower() \
+		or " uhd " in title \
+		or ".uhd." in title.lower():
+			filename["quality_tag"] = "UHD"
+		case title if "1080p" in title.lower():
+			filename["quality_tag"] = "FHD"
+		case title if "720p" in title.lower() \
+		or "bluray" in title.lower() \
+		or "brrip" in title.lower() \
+		or "bdrip" in title.lower() \
+		or "hdrip" in title.lower() \
+		or "webrip" in title.lower() \
+		or "web-dl" in title.lower():
+			filename["quality_tag"] = "HD"
+		case title if "480p" in title.lower() \
+		or "360p" in title.lower() \
+		or "dvd" in title.lower():
+			filename["quality_tag"] = "SD"
+		case _:
+			filename["quality_tag"] = ""
+
+	return filename["quality_tag"]
+
 
 class ScraperTools(WaitUntilElement, FindElement):
 
@@ -125,7 +161,7 @@ class FileBot:
 		except subprocess.CalledProcessError as e:
 			print(f"Error renaming file: {e}")
 
-	def get_names(self, filenames: list[dict[str, str]]):
+	def get_names(self, filenames: list[dict[str, str]]) -> list[dict[str, str]]:
 		print(f"{len(filenames)} files...")
 		for index, filename in enumerate(filenames):
 			# print(filename)
@@ -160,6 +196,7 @@ class FileBot:
 				print(f"ERROR:\n\t{filenames[index]['filename']} - {_result}")
 			if _result.startswith("[TEST]"):
 				# print(_result)
+				# _result = _result.replace("\\","/")  # Windows fix
 				# "[TEST] from [/Users/ian/Documents/Python/P084 - RICO.CX/temp/Scum of the Earth [1963 - USA] sexploitation thriller.mkv] to [/OUTPUT/Scum of the Earth! (1963) {tmdb-28175}.mkv]"
 				# old, new = _result.split("[TEST] from [")[1].split("] to [")
 				old = _result.split("[TEST] from [")[1].split("] to [")[0]
@@ -195,37 +232,7 @@ class FileBot:
 		# 		filenames[index]["quality_tag"] = ""
 
 		for index, filename in enumerate(filenames):
-			if filename.get("quality_tag") is not None:
-				print(f"DEBUG: {filename['filename']} already has a quality tag of '{filename['quality_tag']}'")
-			match filename["original_title"]:
-				case title if "hdcam" in title.lower() \
-				or "camrip" in title.lower() \
-				or "hd-ts" in title.lower() \
-				or ".ts." in title.lower() \
-				or "hdts" in title.lower() \
-				or "hd cam" in title.lower() \
-				or " ts " in title.lower():
-					filenames[index]["quality_tag"] = "CAM"
-				case title if "2160p" in title.lower() \
-				or " uhd " in title \
-				or ".uhd." in title.lower():
-					filenames[index]["quality_tag"] = "UHD"
-				case title if "1080p" in title.lower():
-					filenames[index]["quality_tag"] = "FHD"
-				case title if "720p" in title.lower() \
-				or "bluray" in title.lower() \
-				or "brrip" in title.lower() \
-				or "bdrip" in title.lower() \
-				or "hdrip" in title.lower() \
-				or "webrip" in title.lower() \
-				or "web-dl" in title.lower():
-					filenames[index]["quality_tag"] = "HD"
-				case title if "480p" in title.lower() \
-				or "360p" in title.lower() \
-				or "dvd" in title.lower():
-					filenames[index]["quality_tag"] = "SD"
-				case _:
-					filenames[index]["quality_tag"] = ""
+			filenames[index]["quality_tag"] = get_quality_tag(filename)
 
 		for index, filename in enumerate(filenames):
 			# if filename.get("title") is not None:
@@ -264,29 +271,42 @@ class FileBot:
 
 		results = result.stdout.split("\n")
 		for _result in results:
+			# print(_result.replace("\\","/"))
+			# [TEST] from [C:/Users/User/Desktop/Python/P084 - RICO.CX/temp/North.By.Northwest.1959.720p.BluRay.x264-[YTS.AM].mp4] to [C:/OUTPUT/North by Northwest (1959) {tmdb-213}.mp4]
 			if _result.startswith("[TEST]"):
-				old, new = _result.split("[TEST] from [")[1].split("] to [")
-				old = old.replace(os.getcwd()+"/temp/", "")
+				old, new = _result \
+					.replace("\\","/") \
+					.split("[TEST] from [")[1] \
+					.split("] to [")
+				old = old.replace(os.getcwd().replace("\\", "/")+"/temp/", "")
 				new = new.strip("]").split("/OUTPUT/")[1]
+				# print(f"DEBUG: {old} -> {new}")
 
 				if old == filename:
 					title = new.rsplit(" (", 1)[0]
 					release_year = new.rsplit(" (", 1)[1].split(") ")[0]
 					tmdb_id = new.rsplit(") {tmdb-", 1)[1].split("}")[0]
-					return {
+					filename = {
 						"filename": new,
+						"filename_old": old,
 						"title": title,
 						"release_year": release_year,
-						"tmdb_id": tmdb_id
+						"tmdb_id": tmdb_id,
 					}
 
+					filename["quality_tag"] = get_quality_tag(filename)
+					return filename
+
 		# If no match is found, return default values
-		return {
+		filename = {
 			"filename": filename,
+			"filename_old": filename,
 			"title": filename,
 			"release_year": "1492",  # Ricardo sailed the ocean blue! (in his pirate ship)
-			"tmdb_id": ""
+			"tmdb_id": "",
 		}
+		filename["quality_tag"] = get_quality_tag(filename)
+		return filename
 
 	# def get_name(self, filename: str):
 	# 	extension = filename.rsplit(".", maxsplit=1)[-1].lower()
