@@ -217,6 +217,17 @@ def admin():
 		groups=groups
 	)
 
+@app.route("/logs")
+@login_required
+def view_logs():
+	"""Renders the live log viewing page."""
+	group = GroupMembership.get(current_user.id)
+
+	if not group or group.role not in ["Administrators", "Root"]:
+	    return unauthorized("Only admins can view logs.")
+
+	return render_template("pages/logs.html", user=current_user)
+
 @app.route("/pending")
 def pending():
 	if not current_user.is_authenticated:
