@@ -12,8 +12,8 @@ RICO.GA but the letter A is replaced with a Q but the letter G is replaced with 
 * DRAGON: 225 - Captcha failed (captcha)
 * EAGLE:  500 - download.status is invalid (download_api)
 * FALCON: 502 - Failed to communicate with the search service (search)
-* GUITAR: 
-* HAMMER: 
+* GUITAR: 403 - Real-Debrid API key is invalid (realdebrid)
+* HAMMER: 451 - Infringing video download (realdebrid)
 * IGLOO:  
 * JACKET: 
 * KETTLE: 

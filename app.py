@@ -21,7 +21,7 @@ import requests
 from cachetools import TTLCache, LFUCache
 from oauthlib.oauth2 import WebApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InsecureTransportError
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, redirect, render_template, render_template_string, request, url_for
 from flask_login import (  # type: ignore[import-untyped]
 	LoginManager,
 	current_user,
@@ -39,11 +39,13 @@ from scraper import X1337 as Scraper
 from database import init_db_command
 # from download import Download
 from download_engine import DownloadEngine
+from realdebrid import RealDebridInfringingError, RealDebridAPIError
 from settings import (
 	GOOGLE_CLIENT_ID,
 	GOOGLE_CLIENT_SECRET,
 	GOOGLE_DISCOVERY_URL,
 	ROOT_LIBRARY_LOCATION,
+	DEBUG_MODE,
 )
 
 
@@ -152,7 +154,7 @@ def index(video_url=None):
 		group=group,
 		video_url=video_url
 	)
- 
+
 @app.route('/static/js/settings.js')
 def serve_settings_js():
     return render_template_string(
@@ -304,22 +306,24 @@ def banned():
 
 # 	return {"message": "OK", "data": results}, 200
 
-@app.route("/api/v2/searchone", methods=["GET"])
-def searchone_api(query=None):
-	start = time.time()
-	query = query if query else request.args.get("q")
-	# print(query)
-	if query is None:
-		print(f"Time taken: {round(time.time() - start, 2)}s.")
-		return {"message": "No query provided\nPlease report error code: BAGEL"}, 400
-	data = scraper.search_one(query)
-	# data = f"Search for '{query}'"
 
-	if not data:
-		print(f"Time taken: {round(time.time() - start, 2)}s.")
-		return {"message": "No results found"}, 404
-	print(f"Time taken: {round(time.time() - start, 2)}s.")
-	return {"message": "OK", "data": data}, 200
+#DEPRICATED for now
+# @app.route("/api/v2/searchone", methods=["GET"])
+# def searchone_api(query=None):
+# 	start = time.time()
+# 	query = query if query else request.args.get("q")
+# 	# print(query)
+# 	if query is None:
+# 		print(f"Time taken: {round(time.time() - start, 2)}s.")
+# 		return {"message": "No query provided\nPlease report error code: BAGEL"}, 400
+# 	data = scraper.search_one(query)
+# 	# data = f"Search for '{query}'"
+
+# 	if not data:
+# 		print(f"Time taken: {round(time.time() - start, 2)}s.")
+# 		return {"message": "No results found"}, 404
+# 	print(f"Time taken: {round(time.time() - start, 2)}s.")
+# 	return {"message": "OK", "data": data}, 200
 
 @app.route("/api/v2/getvideo", methods=["GET"])
 async def getvideo_api(page_url: str | None = None):
@@ -435,7 +439,10 @@ def search_api(query=None):
 	return {"message": "OK", "data": [result.sanatize() for result in results]}, 200
 
 @app.route("/api/v2/download", methods=["POST"])
-def download_api(page_url: str | None = None, id: int | None = None) -> tuple[dict, int]:
+@timer
+def download_api(
+	page_url: str | None = None,
+	id: int | None = None) -> tuple[dict, int]:
 	"""
 	Download video file from a page_url.
 
@@ -454,18 +461,35 @@ def download_api(page_url: str | None = None, id: int | None = None) -> tuple[di
 	page_url = page_url if page_url else request.args.get("page_url")
 	result_id = id if id else request.args.get("id")
 	if page_url is None:
-		return {"message": "No page_url provided\nPlease report error code: BANANA", "id": result_id}, 400
+		return {
+			"message": "No page_url provided\nPlease report error code: BANANA",
+			"id": result_id}, 400
 
 	if not (video_url := video_url_cache.get(page_url)):
 		if not (video_url := scraper.get_video_url(page_url)):
-			return {"message": "Failed to get video url\nPlease report error code: AVATAR", "id": result_id}, 508
+			return {
+				"message": "Failed to get video url\nPlease report error code: AVATAR",
+				"id": result_id}, 508
 		video_url_cache[page_url] = video_url
 
-	video_data = video_data_cache.get(page_url)
-	if not (video_data := video_data_cache.get(page_url)):
-		if not (video_data := scraper.get_video_data(page_url)):
-			return {"message": "Failed to get video data\nPlease report error code: ASTRO", "id": result_id}, 508
-		video_data_cache[page_url] = video_data
+	try:
+		video_data = video_data_cache.get(page_url)
+		if not (video_data := video_data_cache.get(page_url)):
+			if not (video_data := scraper.get_video_data(page_url)):
+				return {
+					"message": "Failed to get video data\nPlease report error code: ASTRO",
+					"id": result_id}, 508
+			video_data_cache[page_url] = video_data
+	except RealDebridInfringingError as e:
+		print(f"Real-Debrid error: {e}")
+		return {
+			"message": "Infringing video file, cannot download\nPlease report error code: HAMMER",
+			"id": result_id}, 451
+	except RealDebridAPIError as e:
+		print(f"Real-Debrid error: {e}")
+		return {
+			"message": "Real-Debrid API key is invalid\nPlease report error code: GUITAR",
+			"id": result_id}, 403
 
 	category_mapping = {
 		"tv": "TV SHOWS/",
@@ -474,14 +498,19 @@ def download_api(page_url: str | None = None, id: int | None = None) -> tuple[di
 		"episode": "TV SHOWS/",
 	}
 
-	library_path = category_mapping.get(video_data["catagory"], "MOVIES/")  # default is MOVIES/
+	library_path = category_mapping.get(video_data.get("catagory"), "MOVIES/")  # default is MOVIES/
 
 	# print(f"DEBUG: {video_data} (video_data)")  # video_data is wrong here (FIXED?)
 
-	filename = os.path.join(
+	full_filename = os.path.join(
 		ROOT_LIBRARY_LOCATION,
 		library_path,
-		video_data["filename"].replace(":", "") +".crdownload")  # : filtering should be unnecessary
+		video_data["filename"].rsplit(".", 1)[0],
+		video_data["filename"] +".crdownload")  # : filtering should be unnecessary
+	filename = os.path.join(
+		library_path,
+		video_data["filename"].rsplit(".", 1)[0],
+		video_data["filename"])
 
 	download_engine = DownloadEngine()
 	downloads = download_engine.downloads
@@ -498,14 +527,23 @@ def download_api(page_url: str | None = None, id: int | None = None) -> tuple[di
 			match download.status:
 				case "downloading":
 					print("DEBUG: Already in queue")
-					return {"message": "Already in queue", "video_data": video_data.sanatize(), "id": result_id}, 200
+					return {
+						"message": "Already in queue",
+						"video_data": video_data.sanatize(),
+						"id": result_id}, 200
 				case "initializing":
 					print("DEBUG: Download is initializing")
-					return {"message": "Download is initializing", "video_data": video_data.sanatize(), "id": result_id}, 200
+					return {
+						"message": "Download is initializing",
+						"video_data": video_data.sanatize(),
+						"id": result_id}, 200
 				case "finished":
-					if os.path.exists(download.filename.rsplit(".crdownload", 1)[0]):
+					if os.path.exists(os.path.join(ROOT_LIBRARY_LOCATION, download.filename.rsplit(".crdownload", 1)[0])):
 						print("DEBUG: Already downloaded")
-						return {"message": "Already downloaded", "video_data": video_data.sanatize(), "id": result_id}, 200
+						return {
+							"message": "Already downloaded",
+							"video_data": video_data.sanatize(),
+							"id": result_id}, 200
 					print(f"DEBUG: download.filename: {download.filename}")
 					print(f"DEBUG: filename: {filename}")
 					print("DEBUG: Download was finished but file is missing, retrying...")
@@ -518,21 +556,41 @@ def download_api(page_url: str | None = None, id: int | None = None) -> tuple[di
 					download.delete()
 				case _:
 					print(f"DEBUG: {download.status} is not a valid known status for {filename}")
-					return {"message": f"{download.status} is not a valid known status\nPlease report error code: EAGLE", "id": result_id}, 500
+					return {
+						"message": f"{download.status} is not a valid known status\nPlease report error code: EAGLE",
+						"id": result_id}, 500
 			break
 	user_id = current_user.id if current_user.is_authenticated else "ANYMOOSE"  # -kyrakyrakyrakyra
-	download_engine.create(filename, video_url, user_id, download_quality=video_data.get("quality_tag"))
-	download_engine.queue.append({"url": video_url, "filename": filename})
+	if download_engine.get(filename) and os.path.exists(full_filename):
+		print("DEBUG: Already downloaded.")
+		return {
+			"message": "Already downloaded",
+			"video_data": video_data.sanatize(),
+			"id": result_id}, 200
+	download_engine.create(
+		filename.replace(ROOT_LIBRARY_LOCATION, "").strip("/\\"),
+		video_url,
+		user_id,
+		download_quality=video_data.get("quality_tag")
+	)
+	download_engine.queue.append({"url": video_url, "filename": filename.replace(ROOT_LIBRARY_LOCATION, "").strip("/\\")})
 	download_engine.start()
 	try:
 		if os.path.exists(filename):
 			print("DEBUG: Already downloaded, but database is out of sync.")
-			return {"message": "Already downloaded", "video_data": video_data.sanatize(), "id": result_id}, 200
-		os.rename(filename, filename.rsplit(".crdownload", 1)[0])  # TODO: This should be moved to download_engine.py
+			return {
+				"message": "Already downloaded",
+				"video_data": video_data.sanatize(),
+				"id": result_id}, 200
+		# os.rename(filename, filename.rsplit(".crdownload", 1)[0])  # TODO: This should be moved to download_engine.py
 	except FileNotFoundError:
 		pass
 
-	return {"message": "OK", "video_data": video_data.sanatize(), "video_url": video_url, "id": result_id}, 201
+	return {
+		"message": "OK",
+		"video_data": video_data.sanatize(),
+		"video_url": video_url,
+		"id": result_id}, 201
 
 # @app.route("/api/v1/download", methods=["POST"])
 # def download_api_old(page_url=None):

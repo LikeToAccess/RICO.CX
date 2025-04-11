@@ -11,9 +11,21 @@ from settings import (
 
 def main():
     if DEBUG_MODE:
-        app.app.run(host=HOST, port=PORT, debug=DEBUG_MODE, ssl_context="adhoc", use_reloader=USE_RELOADER)
+        app.app.run(
+            host=HOST,
+            port=PORT,
+            debug=DEBUG_MODE,
+            ssl_context="adhoc",
+            use_reloader=USE_RELOADER
+        )
     else:
-        serve(app.app, host=HOST, port=PORT, threads=12, url_scheme="https")
+        serve(
+            app.app,
+            host=HOST,
+            port=PORT,
+            threads=12,
+            url_scheme="https"
+        )
     # app.app.run(host=HOST, port=PORT, ssl_context="adhoc")
 
 

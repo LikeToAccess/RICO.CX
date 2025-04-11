@@ -57,7 +57,7 @@ class Result(dict):
 					case HtmlElement():
 						title = result.text_content().lower()
 					case dict() | Result():
-						title = result.get("original_title", str()).lower()
+						title = result.get("filename_old", str()).lower()
 					case str() | _:
 						title = result.lower()
 				# print(f"DEBUG: {title} (title)")

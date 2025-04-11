@@ -82,7 +82,29 @@ class Download:
 		db.commit()
 
 	@staticmethod
-	def update(download_filename, download_size=None, download_quality=None, user_id=None, download_status=None):
+	def update(
+		download_filename,
+		download_size=None,
+		download_quality=None,
+		user_id=None,
+		download_status=None):
+		"""
+		Updates the download object in the database.
+
+		Args:
+			download_filename (str): The filename of the download.
+			download_size (int, optional): The total size of bytes. Defaults to None.
+			download_quality (str, optional): The quality tag of the download. Defaults to None.
+			user_id (str, optional): The Google user ID associated with the download. Defaults to None.
+			download_status (str, optional): The current status of the download. Defaults to None.
+
+		Raises:
+			ValueError: If the download_filename is not provided.
+
+		Returns:
+			None
+
+		"""
 		download = Download.get(download_filename)
 		if not download:
 			return
@@ -105,3 +127,6 @@ class Download:
 			"DELETE FROM downloads WHERE download_filename = ?", (self.filename,)
 		)
 		db.commit()
+
+	def __str__(self):
+		return f"Download(filename={self.filename}, url={self.url}, size={self.size}, quality={self.quality}, last_updated={self.last_updated}, status={self.status}, user_id={self.user_id})"
