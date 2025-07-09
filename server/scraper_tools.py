@@ -141,8 +141,9 @@ class FileBot:
 					os.remove(f"temp/{file}")
 		except FileNotFoundError:
 			os.mkdir("temp")
+		
 		try:
-			subprocess.run(["filebot", "-version"], check=True)
+			subprocess.run(["filebot", "-version"], check=True, capture_output=True)
 			print("FileBot initialized.")
 		except FileNotFoundError as e:
 			raise FileNotFoundError("FileBot is not installed. Please install FileBot to use this feature.") from e

@@ -1,5 +1,0 @@
-{% if user.is_authenticated %}
-	<div id="profile">
-		<img src="{{ user.profile_pic }}" alt="Google profile picture" onclick="toggleProfileDropdownMenu('{{ user.profile_pic }}', '{{ user.name }}', '{{ group.role }}');"></img>
-	</div>
-{% endif %}
