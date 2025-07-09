@@ -19,6 +19,7 @@ import urllib.parse
 # from selenium.webdriver.common.by import By
 
 import requests
+import feedparser
 from selenium.common.exceptions import TimeoutException
 
 from timer import timer
@@ -628,16 +629,80 @@ class X1337:
 		return magnet_url
 
 
+class Milkie():
+	def __init__(self):
+		self.homepage_url = "hhttps://milkie.cc/browse?oby=created_at&odir=desc&categories=1&pi=0&ps=50"
+		self.popular_url = "https://milkie.cc/browse?oby=l&odir=desc&categories=1&pi=0&ps=50"
+		self.search_url = "https://milkie.cc/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf&query="
+
+	def search(self, query: str, timeout: int = 10) -> list[Result]:
+		url = self.search_url + urllib.parse.quote(query)
+		request = requests.get(url, timeout=timeout)
+		print(f"DEBUG: {url} (url)")
+		# print(f"DEBUG: {request.text} (request.text)")
+		# Get RSS feed results
+		# rss_results = feedparser.parse(request.text).entries
+
+		# results = []
+		# for rss_result in rss_results:
+		# 	title = rss_result.title
+		# 	year = rss_result.published[:4]
+		# 	page_url = rss_result.link
+		# 	catagory = "movie"
+		# 	results.append(Result(
+		# 		scraper_object=self,
+		# 		title=title,
+		# 		release_year=year,
+		# 		page_url=page_url,
+		# 		catagory=catagory
+		# 	))
+
+		results = self._get_results_from_request(request)
+
+		return results
+
+	def _get_results_from_request(self, request: requests.Response) -> list[Result]:
+		"""
+		Convenience function to convert the request into a list of Result objects
+
+		Args:
+			request (requests.Response): The request object
+
+		Returns:
+			list[Result]: A list of Result objects
+		"""
+		rss_results = feedparser.parse(request.text).entries
+		results = [result.title for result in rss_results]
+		print(results)
+		results = Result.remove.codecs(results)
+		results = Result.remove.bad_characters(results)
+		results = fb.get_names([{
+				"filename":result,
+				"filename_old":result,
+				"page_url":rss_result.link
+			} for result, rss_result in zip(results, rss_results)])
+
+		for index, result in enumerate(results):
+			if result.get("tmdb_id") is None:
+				continue
+			result_data = tmdb.details_movie(result["tmdb_id"])
+			# print(result_data)
+			if result_data.get("poster_path") is not None:
+				results[index]["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+			if result_data.get("runtime") is not None:
+				results[index]["duration"] = result_data["runtime"]
+			if result_data.get("vote_average") is not None:
+				results[index]["score"] = f"{result_data['vote_average']/10:.0%}"
+
+		return [Result(scraper_object=self, **result) for result in results]
+
+
+
 def main():
 	print("Starting scraper...")
-	scraper = X1337()
-	# scraper.open_link("https://soaper.tv/movie_3d8kdr0gY9.html")
-	# print(scraper.html)
-	# print(scraper.get_video_url("https://soaper.tv/movie_5Wk53Mxg1m.html"))
-	results = scraper.popular()
-	# print(json.dumps(results, indent=2))
-	# print(len(results))
-	# scraper.get_video_url(results[0]["page_url"])
+	scraper = Milkie()
+	results = scraper.search("lego movie")
+	print(f"Found {len(results)} results:")
 	for result in results:
 		print(result)
 	# scraper.close()

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask App API Documentation</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        h1 {
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 8px;
+            margin-top: 40px;
+        }
+        code {
+            background-color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "Courier New", Courier, monospace;
+            color: #e74c3c;
+        }
+        .endpoint {
+            background-color: #ffffff;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .method {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #fff;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.9em;
+        }
+        .get { background-color: #27ae60; }
+        .post { background-color: #2980b9; }
+        .public {
+            background-color: #f39c12;
+            color: #fff;
+            padding: 3px 7px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        .auth {
+            background-color: #c0392b;
+            color: #fff;
+            padding: 3px 7px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Flask Application API Documentation</h1>
+    <p>This document provides an overview of the web pages and API endpoints available in the Flask application. It includes details on paths, methods, parameters, and expected responses.</p>
+    <p>Authentication is handled via Google OAuth2. Routes marked with <span class="auth">Login Required</span> require an active user session, while routes marked with <span class="public">Public</span> are accessible to everyone.</p>
+
+    <h2>Web Pages</h2>
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/</code></h3>
+        <h3><span class="method get">GET</span> <code>/&lt;video_url&gt;</code></h3>
+        <p><strong>Function:</strong> <code>index(video_url=None)</code> <span class="public">Public</span></p>
+        <p>Renders the main home page. It can optionally accept a `video_url` to display a specific video.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/search</code></h3>
+        <h3><span class="method get">GET</span> <code>/search/&lt;query&gt;</code></h3>
+        <p><strong>Function:</strong> <code>search_results(query=None)</code> <span class="auth">Login Required</span></p>
+        <p>Displays the search results page. If a `query` is provided in the URL, it shows results for that query.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/admin</code></h3>
+        <p><strong>Function:</strong> <code>admin()</code> <span class="auth">Login Required</span></p>
+        <p>Renders the administrator panel. Access is restricted to users with "Administrators" or "Root" roles. It displays all users and their group memberships.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method post">POST</span> <code>/admin</code></h3>
+        <p><strong>Function:</strong> <code>admin_panel_managment()</code> <span class="auth">Login Required</span></p>
+        <p>Handles administrative actions submitted from the admin panel. Access is restricted to users with "Administrators" or "Root" roles.</p>
+        <h4>Form Data:</h4>
+        <ul>
+            <li><code>user_id</code>: The ID of the user to modify.</li>
+            <li><code>action</code>: The action to perform. Can be "delete", "ban", "unban", or "change_role".</li>
+            <li><code>role</code> (optional): The new role for the user if the action is "change_role".</li>
+        </ul>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/logs</code></h3>
+        <p><strong>Function:</strong> <code>view_logs()</code> <span class="auth">Login Required</span></p>
+        <p>Renders a page for viewing live application logs. Access is restricted to "Administrators" or "Root" users.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/pending</code></h3>
+        <p><strong>Function:</strong> <code>pending()</code> <span class="auth">Login Required</span></p>
+        <p>Displays a "pending approval" page for logged-in users who have not yet been assigned to a group. If the user is already in a group, it redirects to the home page.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/banned</code></h3>
+        <p><strong>Function:</strong> <code>banned()</code> <span class="public">Public</span></p>
+        <p>Shows a page indicating the user is banned. Only accessible to a logged-in user who has been marked as banned; otherwise, it redirects to the home page.</p>
+    </div>
+
+    <h2>Authentication</h2>
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/login</code></h3>
+        <p><strong>Function:</strong> <code>login()</code> <span class="public">Public</span></p>
+        <p>Initiates the Google OAuth2 login flow by redirecting the user to the Google authorization endpoint.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/login/callback</code></h3>
+        <p><strong>Function:</strong> <code>callback()</code> <span class="public">Public</span></p>
+        <p>Handles the callback from Google after the user has authenticated. It exchanges the authorization code for tokens, retrieves user information, creates or updates the user in the database, and logs them in.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/logout</code></h3>
+        <p><strong>Function:</strong> <code>logout()</code> <span class="auth">Login Required</span></p>
+        <p>Logs the current user out of their session and redirects to the home page.</p>
+    </div>
+
+    <h2>API Version 2</h2>
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/api/v2/search</code></h3>
+        <p><strong>Function:</strong> <code>search_api(query=None)</code> <span class="auth">Login Required</span></p>
+        <p>Searches for media based on a query. The query can be a search term, URL, infohash, or magnet link.</p>
+        <h4>Parameters:</h4>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Description</th>
+                <th>Required</th>
+            </tr>
+            <tr>
+                <td><code>q</code></td>
+                <td>Query String</td>
+                <td>The search term.</td>
+                <td>Yes</td>
+            </tr>
+        </table>
+        <h4>Responses:</h4>
+        <ul>
+            <li><code>200 OK</code>: Returns a JSON object with a "data" key containing a list of sanitized search results.</li>
+            <li><code>400 Bad Request</code>: If the `q` parameter is missing.</li>
+            <li><code>404 Not Found</code>: If no results are found for the query.</li>
+            <li><code>502 Bad Gateway</code>: If the backend search service is unreachable.</li>
+        </ul>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/api/v2/getvideo</code></h3>
+        <p><strong>Function:</strong> <code>getvideo_api(page_url=None)</code> <span class="auth">Login Required</span></p>
+        <p>Asynchronously retrieves detailed video data and the direct video URL from a given page URL.</p>
+        <h4>Parameters:</h4>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Description</th>
+                <th>Required</th>
+            </tr>
+            <tr>
+                <td><code>page_url</code></td>
+                <td>Query String</td>
+                <td>The URL of the page containing the video.</td>
+                <td>Yes</td>
+            </tr>
+        </table>
+        <h4>Responses:</h4>
+        <ul>
+            <li><code>200 OK</code>: Returns video data and URL.</li>
+            <li><code>400 Bad Request</code>: If `page_url` is not provided.</li>
+        </ul>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/api/v2/popular</code></h3>
+        <p><strong>Function:</strong> <code>popular_api()</code> <span class="auth">Login Required</span></p>
+        <p>Retrieves a list of popular or trending media items.</p>
+        <h4>Responses:</h4>
+        <ul>
+            <li><code>200 OK</code>: Returns a JSON object with a "data" key containing a list of popular items.</li>
+        </ul>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method post">POST</span> <code>/api/v2/download</code></h3>
+        <p><strong>Function:</strong> <code>download_api(page_url=None, id=None)</code> <span class="auth">Login Required</span></p>
+        <p>Initiates a download for a video file from a given `page_url`.</p>
+        <h4>Parameters:</h4>
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Description</th>
+                <th>Required</th>
+            </tr>
+            <tr>
+                <td><code>page_url</code></td>
+                <td>Query String</td>
+                <td>The URL of the page containing the video content.</td>
+                <td>Yes</td>
+            </tr>
+            <tr>
+                <td><code>id</code></td>
+                <td>Query String</td>
+                <td>An identifier for the result on the client-side.</td>
+                <td>Yes</td>
+            </tr>
+        </table>
+        <h4>Responses:</h4>
+        <ul>
+            <li><code>200 OK</code>: If the item is already downloaded or currently in the download queue.</li>
+            <li><code>201 Created</code>: If the download was successfully queued.</li>
+            <li><code>400 Bad Request</code>: If `page_url` is not provided.</li>
+            <li><code>403 Forbidden</code>: If the Real-Debrid API key is invalid.</li>
+            <li><code>451 Unavailable For Legal Reasons</code>: If the file is infringing and cannot be downloaded.</li>
+            <li><code>508 Loop Detected</code>: If the backend fails to retrieve video data or URL.</li>
+        </ul>
+    </div>
+
+    <h2>Utility & Testing</h2>
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/static/js/settings.js</code></h3>
+        <p><strong>Function:</strong> <code>serve_settings_js()</code></p>
+        <p>Serves a JavaScript file generated from a template. It injects server-side configuration, like the `DEBUG_MODE` setting, into the client-side script.</p>
+    </div>
+
+    <div class="endpoint">
+        <h3><span class="method get">GET</span> <code>/test</code></h3>
+        <h3><span class="method get">GET</span> <code>/test/&lt;filename&gt;</code></h3>
+        <p><strong>Function:</strong> <code>test(filename=None)</code> <span class="public">Public</span></p>
+        <p>A test endpoint for checking the status of downloads. Without a filename, it lists all downloads. With a filename, it returns the status of that specific download.</p>
+    </div>
+
+</body>
+</html>
