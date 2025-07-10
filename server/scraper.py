@@ -30,7 +30,7 @@ from scraper_tools import ScraperTools, TMDbTools, goto_homepage, FileBot
 
 
 tmdb = TMDbTools()
-fb = None  # Lazy initialization
+fb = FileBot()  # Lazy initialization
 rd = RealDebrid()
 
 
