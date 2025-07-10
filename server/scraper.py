@@ -629,11 +629,28 @@ class X1337:
 		return magnet_url
 
 
-class Milkie():
+class Milkie:
 	def __init__(self):
-		self.homepage_url = "hhttps://milkie.cc/browse?oby=created_at&odir=desc&categories=1&pi=0&ps=50"
-		self.popular_url = "https://milkie.cc/browse?oby=l&odir=desc&categories=1&pi=0&ps=50"
+		self.homepage_url = "https://milkie.cc/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
+		self.popular_url = "https://milkie.cc/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
 		self.search_url = "https://milkie.cc/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf&query="
+
+	def popular(self, timeout: int = 10) -> list[Result]:
+		"""
+		Gets the top 80 popular movies and tv episodes
+
+		Args:
+			timeout (int, optional): The timeout for the search. Defaults to 10.
+
+		Returns:
+			list[Result]: A list of Result objects
+		"""
+		url = self.popular_url
+		request = requests.get(url, timeout=timeout)
+		print(f"DEBUG: {url} (url)")
+		results = self._get_results_from_request(request)
+
+		return results
 
 	def search(self, query: str, timeout: int = 10) -> list[Result]:
 		url = self.search_url + urllib.parse.quote(query)
