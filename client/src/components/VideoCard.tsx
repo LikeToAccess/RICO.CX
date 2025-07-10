@@ -39,17 +39,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   const imdbScore = result.score || '';
   const genre = result.genre || '';
 
-  // Debug logging to understand the comparison
-  if (result.filename_old) {
-    console.log('Debug comparison:', {
-      title: title.trim(),
-      filename_old: result.filename_old.trim(),
-      areEqual: result.filename_old.trim() === title.trim(),
-      result_title: result.title,
-      result_filename: result.filename
-    });
-  }
-
   const handleDownload = async () => {
     try {
       setIsDownloading(true);
