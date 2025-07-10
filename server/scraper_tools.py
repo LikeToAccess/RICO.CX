@@ -143,7 +143,7 @@ class FileBot:
 			os.mkdir("temp")
 		
 		try:
-			subprocess.run(["filebot", "-version"], check=True, capture_output=True)
+			subprocess.run(["filebot", "-version"], check=False, capture_output=True)
 			print("FileBot initialized.")
 		except FileNotFoundError as e:
 			raise FileNotFoundError("FileBot is not installed. Please install FileBot to use this feature.") from e

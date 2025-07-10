@@ -13,7 +13,7 @@ class Result(dict):
 				 filename=None,
 				 release_year=None,
 				 description=None,
-				 poster_url="/static/img/missing_poster.svg",
+				 poster_url="https://via.placeholder.com/300x450/333/fff?text=No+Poster",
 				 duration=0,
 				 catagory="unknown",
 				 **kwargs):

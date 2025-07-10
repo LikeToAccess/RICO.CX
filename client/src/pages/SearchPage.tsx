@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Container, Title, Grid, Loader, Center, Alert, Text } from '@mantine/core';
+import { Loader, Center, Alert, Text } from '@mantine/core';
 import { motion } from 'framer-motion';
 import { apiService } from '../services/api';
 import { SearchForm } from '../components/SearchForm';
@@ -20,6 +20,7 @@ export const SearchPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
+        setResults([]); // Clear previous results immediately
         
         let data: SearchResult[];
         if (query === 'popular') {
@@ -29,9 +30,15 @@ export const SearchPage: React.FC = () => {
         }
         
         setResults(data);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Search failed');
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : 'Search failed';
+        setError(errorMsg);
         console.error('Search error:', err);
+        console.error('Error details:', {
+          err,
+          query,
+          decodedQuery: decodeURIComponent(query)
+        });
       } finally {
         setLoading(false);
       }
@@ -41,33 +48,77 @@ export const SearchPage: React.FC = () => {
   }, [query]);
 
   return (
-    <Container size="xl" py="xl">
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'transparent',
+      paddingTop: '6rem'
+    }}>
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <Title order={1} mb="xl" ta="center">
+        <h1 
+          className="title"
+          style={{
+            fontFamily: 'Poppins, sans-serif',
+            color: '#ffffff',
+            textAlign: 'center',
+            fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
+            fontWeight: 'bold',
+            margin: '2rem 0',
+            padding: '0 1rem'
+          }}
+        >
           {query === 'popular' ? 'Popular Content' : `Search Results for "${decodeURIComponent(query || '')}"`}
-        </Title>
+        </h1>
 
-        <SearchForm />
+        <div style={{ 
+          maxWidth: '800px', 
+          margin: '0 auto 2rem auto', 
+          padding: '0 1rem'
+        }}>
+          <SearchForm />
+        </div>
 
         {loading && (
           <Center h={300}>
-            <Loader size="lg" />
+            <div className="preloader">
+              <Loader size="lg" color="var(--secondary-color)" />
+            </div>
           </Center>
         )}
 
         {error && (
-          <Alert color="red" title="Error" mb="xl">
-            {error}
-          </Alert>
+          <div style={{ 
+            maxWidth: '800px', 
+            margin: '0 auto', 
+            padding: '0 1rem' 
+          }}>
+            <Alert 
+              color="red" 
+              title="Error" 
+              style={{
+                backgroundColor: 'var(--result-card-background-color)',
+                borderColor: '#FF0000',
+                color: 'var(--body-text-color)',
+                backdropFilter: 'blur(10px)'
+              }}
+            >
+              {error}
+            </Alert>
+          </div>
         )}
 
         {!loading && !error && results.length === 0 && query && (
           <Center h={200}>
-            <Text size="lg" c="dimmed">
+            <Text 
+              size="lg" 
+              style={{ 
+                color: 'var(--body-text-color)', 
+                opacity: 0.8 
+              }}
+            >
               No results found for "{decodeURIComponent(query)}"
             </Text>
           </Center>
@@ -79,22 +130,31 @@ export const SearchPage: React.FC = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2, duration: 0.6 }}
           >
-            <Grid>
+            <section 
+              id="results-section"
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                gap: '1rem',
+                padding: '0 1rem',
+                marginTop: '2rem'
+              }}
+            >
               {results.map((result, index) => (
-                <Grid.Col key={result.id} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1, duration: 0.5 }}
-                  >
-                    <VideoCard result={result} />
-                  </motion.div>
-                </Grid.Col>
+                <motion.div
+                  key={result.id || result.page_url || index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.1, duration: 0.5 }}
+                >
+                  <VideoCard result={{ ...result, id: result.id || index }} />
+                </motion.div>
               ))}
-            </Grid>
+            </section>
           </motion.div>
         )}
       </motion.div>
-    </Container>
+    </div>
   );
 };

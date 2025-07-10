@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TextInput, Button, Group, Paper } from '@mantine/core';
+import { TextInput, Button } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -25,26 +25,89 @@ export const SearchForm: React.FC = () => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <Paper p="lg" radius="md" mb="xl" style={{ background: 'rgba(255, 255, 255, 0.05)' }}>
+      <div 
+        className="admin-card"
+        style={{ 
+          padding: '2rem', 
+          marginBottom: '2rem',
+          backgroundColor: 'var(--result-card-background-color)',
+          border: '1px solid #808080',
+          borderRadius: '12px',
+          backdropFilter: 'blur(10px)'
+        }}
+      >
         <form onSubmit={handleSubmit}>
-          <Group gap="md">
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
             <TextInput
               placeholder="Search for movies, TV shows..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               leftSection={<IconSearch size={16} />}
-              style={{ flex: 1 }}
               size="lg"
+              styles={{
+                input: {
+                  backgroundColor: 'var(--background-color)',
+                  borderColor: 'var(--secondary-color)',
+                  color: 'var(--body-text-color)',
+                  '&::placeholder': {
+                    color: 'var(--body-text-color)',
+                    opacity: 0.6
+                  },
+                  '&:focus': {
+                    borderColor: 'var(--secondary-color)',
+                    boxShadow: `0 0 0 1px var(--secondary-color)`
+                  }
+                },
+                label: {
+                  color: 'var(--body-text-color)'
+                }
+              }}
             />
-            <Button type="submit" size="lg" disabled={!query.trim()}>
-              Search
-            </Button>
-            <Button variant="outline" size="lg" onClick={handlePopular}>
-              Popular
-            </Button>
-          </Group>
+            
+            <div 
+              className="search-buttons"
+              style={{
+                display: 'flex',
+                gap: '0.75rem',
+                flexDirection: 'row'
+              }}
+            >
+              <Button 
+                type="submit" 
+                size="lg" 
+                disabled={!query.trim()}
+                style={{
+                  backgroundColor: 'var(--secondary-color)',
+                  borderColor: 'var(--secondary-color)',
+                  color: 'white',
+                  transition: 'all 0.2s',
+                  flex: 1
+                }}
+              >
+                Search
+              </Button>
+              <Button 
+                variant="outline" 
+                size="lg" 
+                onClick={handlePopular}
+                style={{
+                  borderColor: 'var(--secondary-color)',
+                  color: 'var(--secondary-color)',
+                  backgroundColor: 'transparent',
+                  transition: 'all 0.2s',
+                  flex: 1
+                }}
+              >
+                Popular
+              </Button>
+            </div>
+          </div>
         </form>
-      </Paper>
+      </div>
     </motion.div>
   );
 };
