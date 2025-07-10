@@ -1,6 +1,5 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { AppShell } from '@mantine/core';
 import { Layout } from './Layout';
 import { HomePage } from '../pages/HomePage';
 import { SearchPage } from '../pages/SearchPage';
