@@ -145,7 +145,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
         position: 'relative',
         width: '280px',
         minWidth: '280px',
-        height: '560px',
+        height: '620px',
         backgroundColor: 'var(--result-card-background-color)',
         border: '1px solid #808080',
         borderRadius: '12px',
@@ -161,15 +161,14 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
           alt={title}
           className="result-thumbnail"
           style={{
-            width: '240px',
-            height: '360px',
+            width: '100%',
+            height: '420px',
             borderRadius: 'inherit',
             borderBottomRightRadius: 0,
             borderBottomLeftRadius: 0,
             borderBottom: 'inherit',
             cursor: 'pointer',
             objectFit: 'cover',
-            margin: '20px auto 0 auto',
             display: 'block'
           }}
           onError={(e) => {
@@ -244,7 +243,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
               overflow: 'hidden',
               textOverflow: 'ellipsis'
             }}>
-              ⭐ {imdbScore}
+              {imdbScore}
             </div>
           )}
 
@@ -271,7 +270,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
         <div className="result-title" style={{
           position: 'absolute',
           textAlign: 'left',
-          top: '390px',
+          top: '450px',
           left: '16px',
           right: '16px',
           fontFamily: '"Open Sans", sans-serif',
@@ -293,7 +292,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
           <div className="result-subtitle" style={{
             position: 'absolute',
             textAlign: 'left',
-            top: '430px',
+            top: '490px',
             left: '16px',
             right: '16px',
             fontFamily: '"Open Sans", sans-serif',
