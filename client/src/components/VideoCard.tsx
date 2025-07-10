@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Image, Text, Badge, Button, Group, Stack, Loader } from '@mantine/core';
+import { Button, Loader } from '@mantine/core';
 import { IconDownload, IconCheck, IconX } from '@tabler/icons-react';
 import { motion } from 'framer-motion';
 import { apiService } from '../services/api';
@@ -17,7 +17,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   // Handle both flat and nested data structures
   // Prioritize FileBot-processed title over raw filename
   const title = result.title || result.filename || 'Unknown Title';
-  const poster = result.poster_url || 'https://via.placeholder.com/300x450/333/fff?text=No+Poster';
+  const poster = result.poster_url || 'http://localhost:5000/static/img/missing_poster.svg';
   const quality = result.quality_tag || '';
   const description = result.description || '';
   const year = result.release_year || '';
@@ -54,6 +54,18 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   };
 
   const getDownloadButton = () => {
+    const buttonStyle = {
+      width: '100%',
+      fontSize: '12px',
+      padding: '6px 12px',
+      borderRadius: '4px',
+      border: 'none',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      fontFamily: 'Poppins, sans-serif',
+      fontWeight: '500'
+    };
+
     switch (downloadStatus) {
       case 'downloading':
         return (
@@ -61,6 +73,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
             leftSection={<Loader size={16} />} 
             disabled 
             size="sm"
+            style={{
+              ...buttonStyle,
+              backgroundColor: '#999',
+              color: 'white'
+            }}
           >
             Downloading...
           </Button>
@@ -72,6 +89,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
             color="green" 
             disabled 
             size="sm"
+            style={{
+              ...buttonStyle,
+              backgroundColor: '#4CAF50',
+              color: 'white'
+            }}
           >
             Downloaded
           </Button>
@@ -83,6 +105,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
             color="red" 
             onClick={handleDownload}
             size="sm"
+            style={{
+              ...buttonStyle,
+              backgroundColor: '#FF0000',
+              color: 'white'
+            }}
           >
             Retry
           </Button>
@@ -94,6 +121,11 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
             onClick={handleDownload} 
             disabled={isDownloading}
             size="sm"
+            style={{
+              ...buttonStyle,
+              backgroundColor: 'var(--secondary-color)',
+              color: 'white'
+            }}
           >
             Download
           </Button>
@@ -103,64 +135,175 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
+      whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       style={{ height: '100%' }}
+      className="search-result"
     >
-      <Card shadow="sm" padding="lg" radius="md" withBorder style={{ height: '630px', display: 'flex', flexDirection: 'column' }}>
-        <Card.Section style={{ flex: '0 0 450px' }}>
-          <Image
-            src={poster}
-            height={450}
-            alt={title}
-            fallbackSrc="https://via.placeholder.com/300x450/333/fff?text=No+Poster"
-            fit="cover"
-          />
-        </Card.Section>
+      <div style={{ 
+        position: 'relative',
+        width: '240px',
+        minWidth: '240px',
+        height: '520px',
+        backgroundColor: 'var(--result-card-background-color)',
+        border: '1px solid #808080',
+        borderRadius: '12px',
+        margin: '3px',
+        marginBottom: '12px',
+        transition: '0.2s',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        {/* Poster Image */}
+        <img
+          src={poster}
+          alt={title}
+          className="result-thumbnail"
+          style={{
+            aspectRatio: '2 / 3',
+            borderRadius: 'inherit',
+            borderBottomRightRadius: 0,
+            borderBottomLeftRadius: 0,
+            borderBottom: 'inherit',
+            width: '100%',
+            cursor: 'pointer',
+            objectFit: 'cover'
+          }}
+          onError={(e) => {
+            const target = e.currentTarget;
+            // First fallback: try the server's missing poster
+            if (target.src !== "http://localhost:5000/static/img/missing_poster.svg") {
+              target.src = "http://localhost:5000/static/img/missing_poster.svg";
+            } else {
+              // Second fallback: use a data URL with a simple gray placeholder
+              target.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiM0YTRhNGEiLz48dGV4dCB4PSIxNTAiIHk9IjIyNSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gUG9zdGVyPC90ZXh0Pjwvc3ZnPg==";
+            }
+          }}
+        />
 
-        <Stack gap="xs" mt="sm" style={{ flex: 1 }}>
-          <div style={{ flex: 1 }}>
-            <Group justify="space-between" align="flex-start" mb="xs">
-              <Text fw={500} size="sm" lineClamp={2} style={{ flex: 1, lineHeight: 1.2 }}>
-                {title}
-              </Text>
-              {quality && (
-                <Badge color="blue" variant="light" size="xs" style={{ flexShrink: 0 }}>
-                  {quality}
-                </Badge>
-              )}
-            </Group>
-
-            {description && (
-              <Text size="xs" c="dimmed" lineClamp={2} mb="xs">
-                {description}
-              </Text>
-            )}
-
-            <Group justify="space-between" gap="xs" mb="xs">
-              <Text size="xs" c="dimmed">
-                {year && duration ? `${year} • ${duration}min` : year || (duration ? `${duration}min` : '')}
-              </Text>
-              {imdbScore && (
-                <Text size="xs" c="dimmed">
-                  ⭐ {imdbScore}
-                </Text>
-              )}
-            </Group>
-
-            {genre && (
-              <Text size="xs" c="dimmed" lineClamp={1} mb="xs">
-                {genre}
-              </Text>
-            )}
+        {/* Quality Badge */}
+        {quality && (
+          <div className="label result-quality" style={{
+            position: 'absolute',
+            top: '5px',
+            right: '12px',
+            backgroundColor: 'rgba(49, 130, 206, 0.8)',
+            color: 'var(--body-text-color)',
+            fontSize: '12px',
+            padding: '3px 8px',
+            borderRadius: '80vw',
+            fontFamily: 'LexendBold, Poppins, sans-serif'
+          }}>
+            {quality}
           </div>
+        )}
 
-          <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
-            {getDownloadButton()}
+        {/* Year Badge */}
+        {year && (
+          <div className="label result-year" style={{
+            position: 'absolute',
+            bottom: '90px',
+            left: '12px',
+            backgroundColor: 'rgba(49, 130, 206, 0.6)',
+            color: 'var(--body-text-color)',
+            fontSize: '14px',
+            padding: '3px 8px',
+            borderRadius: '80vw',
+            fontFamily: 'LexendBold, Poppins, sans-serif'
+          }}>
+            {year}
           </div>
-        </Stack>
-      </Card>
+        )}
+
+        {/* Score Badge */}
+        {imdbScore && (
+          <div className="label result-score" style={{
+            position: 'absolute',
+            bottom: '60px',
+            left: '12px',
+            backgroundColor: 'rgba(229, 62, 62, 0.8)',
+            color: 'var(--body-text-color)',
+            fontSize: '14px',
+            padding: '3px 8px',
+            borderRadius: '80vw',
+            fontFamily: 'LexendBold, Poppins, sans-serif'
+          }}>
+            ⭐ {imdbScore}
+          </div>
+        )}
+
+        {/* Duration Badge */}
+        {duration && (
+          <div className="label result-duration" style={{
+            position: 'absolute',
+            bottom: '30px',
+            left: '12px',
+            backgroundColor: 'rgba(0, 181, 216, 0.6)',
+            color: 'var(--body-text-color)',
+            fontSize: '14px',
+            padding: '3px 8px',
+            borderRadius: '80vw',
+            fontFamily: 'LexendBold, Poppins, sans-serif'
+          }}>
+            {duration}min
+          </div>
+        )}
+
+        {/* Title */}
+        <div className="result-title" style={{
+          position: 'absolute',
+          textAlign: 'center',
+          bottom: '120px',
+          left: '16px',
+          right: '16px',
+          fontFamily: '"Open Sans", sans-serif',
+          color: 'var(--body-text-color)',
+          fontSize: '14px',
+          fontWeight: '500',
+          lineHeight: '1.2',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical' as const
+        }}>
+          {title}
+        </div>
+
+        {/* Description/Genre */}
+        {(description || genre) && (
+          <div className="result-subtitle" style={{
+            position: 'absolute',
+            textAlign: 'center',
+            bottom: '95px',
+            left: '16px',
+            right: '16px',
+            fontFamily: '"Open Sans", sans-serif',
+            fontSize: '12px',
+            color: 'var(--body-text-color)',
+            opacity: 0.8,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 1,
+            WebkitBoxOrient: 'vertical' as const
+          }}>
+            {description || genre}
+          </div>
+        )}
+
+        {/* Download Button */}
+        <div style={{
+          position: 'absolute',
+          bottom: '12px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: 'calc(100% - 24px)'
+        }}>
+          {getDownloadButton()}
+        </div>
+      </div>
     </motion.div>
   );
 };

@@ -1,6 +1,5 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import { Container, Title } from '@mantine/core';
 import { motion } from 'framer-motion';
 import { SearchForm } from '../components/SearchForm';
 import { VideoPlayer } from '../components/VideoPlayer';
@@ -10,35 +9,48 @@ export const HomePage: React.FC = () => {
   const { videoUrl } = useParams<{ videoUrl: string }>();
 
   return (
-    <Container size="xl" py="xl">
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'transparent',
+      paddingTop: '6rem'
+    }}>
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <Title
-          order={1}
-          size="h1"
-          mb="xl"
-          ta="center"
+        <h1
+          className="title"
           style={{
-            fontFamily: 'YouTubeSansDarkSemibold, Poppins, sans-serif',
-            background: 'linear-gradient(45deg, #3b82f6, #8b5cf6)',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            fontFamily: 'Poppins, sans-serif',
+            color: '#ffffff',
+            textAlign: 'center',
+            fontSize: '3rem',
+            fontWeight: 'bold',
+            margin: '2rem 0'
           }}
         >
           Welcome to RICO.CX
-        </Title>
+        </h1>
 
-        <SearchForm />
+        <div style={{ 
+          maxWidth: '800px', 
+          margin: '0 auto', 
+          padding: '0 2rem' 
+        }}>
+          <SearchForm />
+        </div>
 
         {videoUrl && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.3, duration: 0.5 }}
+            style={{ 
+              margin: '2rem auto', 
+              maxWidth: '1200px', 
+              padding: '0 2rem' 
+            }}
           >
             <VideoPlayer videoUrl={videoUrl} />
           </motion.div>
@@ -48,10 +60,15 @@ export const HomePage: React.FC = () => {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.6 }}
+          style={{ 
+            margin: '2rem auto', 
+            maxWidth: '1200px', 
+            padding: '0 2rem' 
+          }}
         >
           <PopularContent />
         </motion.div>
       </motion.div>
-    </Container>
+    </div>
   );
 };
