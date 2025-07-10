@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button, Loader } from '@mantine/core';
 import { IconDownload, IconCheck, IconX } from '@tabler/icons-react';
 import { motion } from 'framer-motion';
@@ -13,10 +13,24 @@ interface VideoCardProps {
 export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
+  const [titleHeight, setTitleHeight] = useState(0);
+  const titleRef = useRef<HTMLDivElement>(null);
 
   // Handle both flat and nested data structures
   // Prioritize FileBot-processed title over raw filename
   const title = result.title || result.filename || 'Unknown Title';
+
+  useEffect(() => {
+    if (titleRef.current) {
+      setTitleHeight(titleRef.current.offsetHeight);
+    }
+  }, [title]); // Now title is defined
+
+  // Calculate dynamic position based on title height
+  // Single line is about 24px (20px font * 1.2 line-height), wrapped is about 48px
+  const isWrapped = titleHeight > 35; 
+  const filenameTopPosition = isWrapped ? '500px' : '485px';
+
   const poster = result.poster_url || 'http://localhost:5000/static/img/missing_poster.svg';
   const quality = result.quality_tag || '';
   const description = result.description || '';
@@ -24,6 +38,17 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   const duration = result.duration || '';
   const imdbScore = result.score || '';
   const genre = result.genre || '';
+
+  // Debug logging to understand the comparison
+  if (result.filename_old) {
+    console.log('Debug comparison:', {
+      title: title.trim(),
+      filename_old: result.filename_old.trim(),
+      areEqual: result.filename_old.trim() === title.trim(),
+      result_title: result.title,
+      result_filename: result.filename
+    });
+  }
 
   const handleDownload = async () => {
     try {
@@ -63,7 +88,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
       cursor: 'pointer',
       transition: 'all 0.2s',
       fontFamily: 'Poppins, sans-serif',
-      fontWeight: '500'
+      fontWeight: 'bold'
     };
 
     switch (downloadStatus) {
@@ -194,7 +219,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
             fontSize: '14px',
             padding: '4px 10px',
             borderRadius: '80vw',
-            fontFamily: 'LexendBold, Poppins, sans-serif'
+            fontFamily: 'LexendBold, Poppins, sans-serif',
+            fontWeight: 'bold'
           }}>
             {quality}
           </div>
@@ -220,6 +246,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
               padding: '4px 10px',
               borderRadius: '80vw',
               fontFamily: 'LexendBold, Poppins, sans-serif',
+              fontWeight: 'bold',
               textAlign: 'center',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -238,6 +265,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
               padding: '4px 10px',
               borderRadius: '80vw',
               fontFamily: 'LexendBold, Poppins, sans-serif',
+              fontWeight: 'bold',
               textAlign: 'center',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -256,6 +284,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
               padding: '4px 10px',
               borderRadius: '80vw',
               fontFamily: 'LexendBold, Poppins, sans-serif',
+              fontWeight: 'bold',
               textAlign: 'center',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
@@ -267,32 +296,59 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
         </div>
 
         {/* Title */}
-        <div className="result-title" style={{
-          position: 'absolute',
-          textAlign: 'left',
-          top: '450px',
-          left: '16px',
-          right: '16px',
-          fontFamily: '"Open Sans", sans-serif',
-          color: 'var(--body-text-color)',
-          fontSize: '20px',
-          fontWeight: '600',
-          lineHeight: '1.2',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical' as const
-        }}>
+        <div 
+          ref={titleRef}
+          className="result-title" 
+          style={{
+            position: 'absolute',
+            textAlign: 'left',
+            top: '450px',
+            left: '16px',
+            right: '16px',
+            fontFamily: '"Open Sans", sans-serif',
+            color: 'var(--body-text-color)',
+            fontSize: '20px',
+            fontWeight: '600',
+            lineHeight: '1.2',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical' as const
+          }}
+        >
           {title}
         </div>
+
+        {/* Original Filename */}
+        {result.filename_old && result.filename_old.trim() !== title.trim() && (
+          <div className="result-filename" style={{
+            position: 'absolute',
+            textAlign: 'left',
+            top: filenameTopPosition,
+            left: '16px',
+            right: '16px',
+            fontFamily: '"Open Sans", sans-serif',
+            fontSize: '12px',
+            color: 'var(--body-text-color)',
+            opacity: 0.6,
+            fontStyle: 'italic',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            display: '-webkit-box',
+            WebkitLineClamp: 1,
+            WebkitBoxOrient: 'vertical' as const
+          }}>
+            {result.filename_old}
+          </div>
+        )}
 
         {/* Description/Genre */}
         {(description || genre) && (
           <div className="result-subtitle" style={{
             position: 'absolute',
             textAlign: 'left',
-            top: '490px',
+            top: '505px',
             left: '16px',
             right: '16px',
             fontFamily: '"Open Sans", sans-serif',

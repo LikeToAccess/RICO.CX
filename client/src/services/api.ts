@@ -29,6 +29,7 @@ export interface SearchResult {
   };
   // Add fields that might actually be coming from backend
   filename?: string;
+  filename_old?: string;  // Added for original filename
   release_year?: string;
   description?: string;
   catagory?: string;
