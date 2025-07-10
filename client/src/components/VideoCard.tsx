@@ -14,12 +14,23 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
 
+  // Handle both flat and nested data structures
+  // Prioritize FileBot-processed title over raw filename
+  const title = result.title || result.filename || 'Unknown Title';
+  const poster = result.poster_url || 'https://via.placeholder.com/300x450/333/fff?text=No+Poster';
+  const quality = result.quality_tag || '';
+  const description = result.description || '';
+  const year = result.release_year || '';
+  const duration = result.duration || '';
+  const imdbScore = result.score || '';
+  const genre = result.genre || '';
+
   const handleDownload = async () => {
     try {
       setIsDownloading(true);
       setDownloadStatus('downloading');
       
-      await apiService.downloadVideo(result.page_url, result.id);
+      await apiService.downloadVideo(result.page_url, result.id || 0);
       
       setDownloadStatus('success');
       notifications.show({
@@ -28,11 +39,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
         color: 'green',
         icon: <IconCheck size={16} />,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setDownloadStatus('error');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to start download';
       notifications.show({
         title: 'Download Failed',
-        message: error.response?.data?.message || 'Failed to start download',
+        message: errorMessage,
         color: 'red',
         icon: <IconX size={16} />,
       });
@@ -94,47 +106,59 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      style={{ height: '100%' }}
     >
-      <Card shadow="sm" padding="lg" radius="md" withBorder h="100%">
-        <Card.Section>
+      <Card shadow="sm" padding="lg" radius="md" withBorder style={{ height: '630px', display: 'flex', flexDirection: 'column' }}>
+        <Card.Section style={{ flex: '0 0 450px' }}>
           <Image
-            src={result.poster_url}
-            height={300}
-            alt={result.title}
-            fallbackSrc="/placeholder-poster.png"
+            src={poster}
+            height={450}
+            alt={title}
+            fallbackSrc="https://via.placeholder.com/300x450/333/fff?text=No+Poster"
+            fit="cover"
           />
         </Card.Section>
 
-        <Stack gap="sm" mt="md">
-          <Group justify="space-between" align="flex-start">
-            <Text fw={500} size="lg" lineClamp={2}>
-              {result.data.title}
-            </Text>
-            <Badge color="blue" variant="light">
-              {result.data.quality_tag}
-            </Badge>
-          </Group>
+        <Stack gap="xs" mt="sm" style={{ flex: 1 }}>
+          <div style={{ flex: 1 }}>
+            <Group justify="space-between" align="flex-start" mb="xs">
+              <Text fw={500} size="sm" lineClamp={2} style={{ flex: 1, lineHeight: 1.2 }}>
+                {title}
+              </Text>
+              {quality && (
+                <Badge color="blue" variant="light" size="xs" style={{ flexShrink: 0 }}>
+                  {quality}
+                </Badge>
+              )}
+            </Group>
 
-          <Text size="sm" c="dimmed" lineClamp={3}>
-            {result.data.description_preview}
-          </Text>
+            {description && (
+              <Text size="xs" c="dimmed" lineClamp={2} mb="xs">
+                {description}
+              </Text>
+            )}
 
-          <Group justify="space-between" gap="xs">
-            <Text size="xs" c="dimmed">
-              {result.data.release_year} • {result.data.duration}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {result.data.imdb_score}
-            </Text>
-          </Group>
+            <Group justify="space-between" gap="xs" mb="xs">
+              <Text size="xs" c="dimmed">
+                {year && duration ? `${year} • ${duration}min` : year || (duration ? `${duration}min` : '')}
+              </Text>
+              {imdbScore && (
+                <Text size="xs" c="dimmed">
+                  ⭐ {imdbScore}
+                </Text>
+              )}
+            </Group>
 
-          <Group justify="space-between" gap="xs">
-            <Text size="xs" c="dimmed" lineClamp={1}>
-              {result.data.genre}
-            </Text>
-          </Group>
+            {genre && (
+              <Text size="xs" c="dimmed" lineClamp={1} mb="xs">
+                {genre}
+              </Text>
+            )}
+          </div>
 
-          {getDownloadButton()}
+          <div style={{ marginTop: 'auto', paddingTop: '8px' }}>
+            {getDownloadButton()}
+          </div>
         </Stack>
       </Card>
     </motion.div>

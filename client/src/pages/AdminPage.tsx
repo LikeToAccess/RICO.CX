@@ -3,7 +3,7 @@ import { Container, Title, Table, Button, Modal, Select, Alert, Badge, Group, Ac
 import { IconTrash, IconBan, IconShield } from '@tabler/icons-react';
 import { motion } from 'framer-motion';
 import { notifications } from '@mantine/notifications';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 interface User {
   id: string;
@@ -20,8 +20,10 @@ interface GroupMembership {
 
 export const AdminPage: React.FC = () => {
   const { group } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
-  const [groups, setGroups] = useState<GroupMembership[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [users, _setUsers] = useState<User[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [groups, _setGroups] = useState<GroupMembership[]>([]);
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
   const [modalOpened, setModalOpened] = useState(false);
   const [actionType, setActionType] = useState<'delete' | 'ban' | 'unban' | 'change_role'>('delete');
@@ -60,7 +62,8 @@ export const AdminPage: React.FC = () => {
       } else {
         throw new Error('Action failed');
       }
-    } catch (error) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       notifications.show({
         title: 'Error',
         message: 'Failed to perform action',

@@ -29,8 +29,17 @@ from scraper_tools import ScraperTools, TMDbTools, goto_homepage, FileBot
 
 
 tmdb = TMDbTools()
-fb = FileBot()
+fb = None  # Lazy initialization
 rd = RealDebrid()
+
+
+def get_filebot():
+	"""Lazy initialization of FileBot to avoid blocking server startup"""
+	global fb
+	if fb is None:
+		print("Initializing FileBot...")
+		fb = FileBot()
+	return fb
 
 
 # class Goojara(ScraperTools):
@@ -502,7 +511,7 @@ class X1337:
 		results = find_elements_by_xpath(request.text, '//td/a[contains(@href, "/torrent/")]')
 		results = Result.remove.codecs(results)
 		results = Result.remove.bad_characters(results)
-		results = fb.get_names([{
+		results = get_filebot().get_names([{
 				"filename":result.text,
 				"filename_old":result.text,
 				"page_url":self.homepage_url+result.get("href")
@@ -514,7 +523,7 @@ class X1337:
 			result_data = tmdb.details_movie(result["tmdb_id"])
 			# print(result_data)
 			if result_data.get("poster_path") is not None:
-				results[index]["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+				results[index]["poster_url"] = "https://image.tmdb.org/t/p/w342"+ result_data['poster_path']
 			if result_data.get("runtime") is not None:
 				results[index]["duration"] = result_data["runtime"]
 			if result_data.get("vote_average") is not None:
@@ -598,7 +607,7 @@ class X1337:
 		filename = rd.get_filename(torrent_id)
 		rd.remove_torrent(torrent_id)
 
-		result = fb.get_name(filename)
+		result = get_filebot().get_name(filename)
 		if not result.get("tmdb_id"):
 			print(f"WARNING: Could not find {filename} on TMDb.")
 			print(f"DEBUG: {result} (result)")
@@ -606,7 +615,7 @@ class X1337:
 		print(f"DEBUG: {result["tmdb_id"]} (tmdb_id)")
 		result_data = tmdb.details_movie(result["tmdb_id"])
 		if result_data.get("poster_path") is not None:
-			result["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+			result["poster_url"] = "https://image.tmdb.org/t/p/w342"+ result_data['poster_path']
 		if result_data.get("runtime") is not None:
 			result["duration"] = result_data["runtime"]
 

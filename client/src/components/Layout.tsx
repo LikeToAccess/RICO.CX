@@ -1,6 +1,6 @@
 import React from 'react';
 import { AppShell, Text, Group, Button, Avatar, Menu } from '@mantine/core';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 

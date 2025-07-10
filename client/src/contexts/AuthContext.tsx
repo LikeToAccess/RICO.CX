@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 
 interface User {
@@ -25,6 +25,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+export { AuthContext };
+
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -32,32 +34,13 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [group, setGroup] = useState<Group | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false); // No auth checking needed
 
   useEffect(() => {
-    // Check if user is authenticated by trying to access a protected endpoint
-    checkAuthStatus();
+    // Authentication is handled server-side via session cookies
+    // No need to check auth status on frontend
+    setIsLoading(false);
   }, []);
-
-  const checkAuthStatus = async () => {
-    try {
-      setIsLoading(true);
-      // Try to get user data from a protected endpoint
-      const response = await fetch('/api/v2/user-status', {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData.user);
-        setGroup(userData.group);
-      }
-    } catch (error) {
-      console.log('Not authenticated');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const login = () => {
     window.location.href = '/login';
@@ -91,12 +74,4 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };

@@ -40,3 +40,44 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Video Card Grid Improvements */
+.video-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+  align-items: stretch;
+}
+
+.video-card-grid > * {
+  height: 100%;
+}
+
+/* Ensure video cards maintain consistent height */
+.video-card {
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-card .poster-section {
+  flex: 0 0 300px;
+}
+
+.video-card .content-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Improve text truncation */
+.video-card .title-text {
+  word-break: break-word;
+  hyphens: auto;
+}
+
+/* Make poster images load smoothly */
+.video-card img {
+  transition: opacity 0.3s ease;
+}

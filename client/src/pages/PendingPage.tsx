@@ -1,7 +1,7 @@
 import React from 'react';
 import { Container, Title, Text, Paper, Center, Stack } from '@mantine/core';
 import { motion } from 'framer-motion';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 export const PendingPage: React.FC = () => {
   const { user } = useAuth();

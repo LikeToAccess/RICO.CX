@@ -29,9 +29,15 @@ export const SearchPage: React.FC = () => {
         }
         
         setResults(data);
-      } catch (err: any) {
-        setError(err.response?.data?.message || 'Search failed');
+      } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : 'Search failed';
+        setError(errorMsg);
         console.error('Search error:', err);
+        console.error('Error details:', {
+          err,
+          query,
+          decodedQuery: decodeURIComponent(query)
+        });
       } finally {
         setLoading(false);
       }
@@ -81,13 +87,13 @@ export const SearchPage: React.FC = () => {
           >
             <Grid>
               {results.map((result, index) => (
-                <Grid.Col key={result.id} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
+                <Grid.Col key={result.id || result.page_url || index} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.1, duration: 0.5 }}
                   >
-                    <VideoCard result={result} />
+                    <VideoCard result={{ ...result, id: result.id || index }} />
                   </motion.div>
                 </Grid.Col>
               ))}
