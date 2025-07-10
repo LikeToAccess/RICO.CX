@@ -30,17 +30,8 @@ from scraper_tools import ScraperTools, TMDbTools, goto_homepage, FileBot
 
 
 tmdb = TMDbTools()
-fb = FileBot()  # Lazy initialization
+fb = FileBot()
 rd = RealDebrid()
-
-
-def get_filebot():
-	"""Lazy initialization of FileBot to avoid blocking server startup"""
-	global fb
-	if fb is None:
-		print("Initializing FileBot...")
-		fb = FileBot()
-	return fb
 
 
 # class Goojara(ScraperTools):
@@ -512,7 +503,7 @@ class X1337:
 		results = find_elements_by_xpath(request.text, '//td/a[contains(@href, "/torrent/")]')
 		results = Result.remove.codecs(results)
 		results = Result.remove.bad_characters(results)
-		results = get_filebot().get_names([{
+		results = fb.get_names([{
 				"filename":result.text,
 				"filename_old":result.text,
 				"page_url":self.homepage_url+result.get("href")
@@ -524,7 +515,7 @@ class X1337:
 			result_data = tmdb.details_movie(result["tmdb_id"])
 			# print(result_data)
 			if result_data.get("poster_path") is not None:
-				results[index]["poster_url"] = "https://image.tmdb.org/t/p/w342"+ result_data['poster_path']
+				results[index]["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
 			if result_data.get("runtime") is not None:
 				results[index]["duration"] = result_data["runtime"]
 			if result_data.get("vote_average") is not None:
@@ -608,7 +599,7 @@ class X1337:
 		filename = rd.get_filename(torrent_id)
 		rd.remove_torrent(torrent_id)
 
-		result = get_filebot().get_name(filename)
+		result = fb.get_name(filename)
 		if not result.get("tmdb_id"):
 			print(f"WARNING: Could not find {filename} on TMDb.")
 			print(f"DEBUG: {result} (result)")
@@ -616,7 +607,7 @@ class X1337:
 		print(f"DEBUG: {result["tmdb_id"]} (tmdb_id)")
 		result_data = tmdb.details_movie(result["tmdb_id"])
 		if result_data.get("poster_path") is not None:
-			result["poster_url"] = "https://image.tmdb.org/t/p/w342"+ result_data['poster_path']
+			result["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
 		if result_data.get("runtime") is not None:
 			result["duration"] = result_data["runtime"]
 
@@ -721,6 +712,39 @@ class Milkie:
 				results[index]["score"] = f"{result_data['vote_average']/10:.0%}"
 
 		return [Result(scraper_object=self, **result) for result in results]
+
+	def get_video_data(self, page_url: str) -> Result:
+		torrent_id = rd.add_torrent(page_url)["id"]
+		filename = rd.get_filename(torrent_id)
+		rd.remove_torrent(torrent_id)
+		result = fb.get_name(filename)
+		if not result.get("tmdb_id"):
+			print(f"WARNING: Could not find {filename} on TMDb.")
+			print(f"DEBUG: {result} (result)")
+			return Result(**result)
+		print(f"DEBUG: {result["tmdb_id"]} (tmdb_id)")
+		result_data = tmdb.details_movie(result["tmdb_id"])
+		if result_data.get("poster_path") is not None:
+			result["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+		if result_data.get("runtime") is not None:
+			result["duration"] = result_data["runtime"]
+
+		video_data = Result(
+			scraper_object=self,
+			page_url=page_url,
+			**result)
+		print(f"DEBUG: {video_data} (video_data) (type={type(video_data)})")
+
+		return video_data
+
+	def get_video_url(self, page_url: str) -> str:
+		torrent_id = rd.add_torrent(page_url)["id"]
+		infohash = rd.get_torrent_info(torrent_id)["hash"]
+		rd.remove_torrent(torrent_id)
+		magnet_url = f"magnet:?xt=urn:btih:{infohash}"
+
+		print(f"DEBUG: {magnet_url} (magnet_url)")
+		return magnet_url
 
 
 

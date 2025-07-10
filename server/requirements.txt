@@ -19,3 +19,4 @@ discord
 lxml
 dotenv
 feedparser
+bencodepy
