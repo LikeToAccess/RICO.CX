@@ -356,6 +356,7 @@ class RealDebrid:
 		if not torrent_info:
 			torrent_id = self.add_magnet(infohash)
 			torrent_info = self.get_torrent_info(torrent_id)
+		# print("DEBUG HERE")
 
 		video_files = self.get_video_files(torrent_info["files"])
 		if not video_files:

@@ -485,6 +485,7 @@ def download_api(
 
 	try:
 		video_data = video_data_cache.get(page_url)
+		# print(f"DEBUG: {video_data} (video_data)")
 		if not (video_data := video_data_cache.get(page_url)):
 			if not (video_data := scraper.get_video_data(page_url)):
 				return {
@@ -492,6 +493,7 @@ def download_api(
 					"id": result_id}, 508
 			video_data_cache[page_url] = video_data
 	except RealDebridInfringingError as e:
+		# print(f"DEBUG: {video_data} (video_data)")
 		print(f"Real-Debrid error: {e}")
 		return {
 			"message": "Infringing video file, cannot download\nPlease report error code: HAMMER",

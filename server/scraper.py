@@ -715,7 +715,8 @@ class Milkie:
 
 	def get_video_data(self, page_url: str) -> Result:
 		torrent_id = rd.add_torrent(page_url)["id"]
-		filename = rd.get_filename(torrent_id)
+		filename = rd.get_torrent_info(torrent_id)["filename"]  # FAIL HERE
+		# print(f"DEBUG: {filename} (filename)")
 		rd.remove_torrent(torrent_id)
 		result = fb.get_name(filename)
 		if not result.get("tmdb_id"):
@@ -745,7 +746,6 @@ class Milkie:
 
 		print(f"DEBUG: {magnet_url} (magnet_url)")
 		return magnet_url
-
 
 
 def main():
