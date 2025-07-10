@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TextInput, Button, Group } from '@mantine/core';
+import { TextInput, Button } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -37,13 +37,16 @@ export const SearchForm: React.FC = () => {
         }}
       >
         <form onSubmit={handleSubmit}>
-          <Group gap="md" style={{ alignItems: 'flex-end' }}>
+          <div style={{ 
+            display: 'flex', 
+            flexDirection: 'column',
+            gap: '1rem'
+          }}>
             <TextInput
               placeholder="Search for movies, TV shows..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               leftSection={<IconSearch size={16} />}
-              style={{ flex: 1 }}
               size="lg"
               styles={{
                 input: {
@@ -64,33 +67,45 @@ export const SearchForm: React.FC = () => {
                 }
               }}
             />
-            <Button 
-              type="submit" 
-              size="lg" 
-              disabled={!query.trim()}
+            
+            <div 
+              className="search-buttons"
               style={{
-                backgroundColor: 'var(--secondary-color)',
-                borderColor: 'var(--secondary-color)',
-                color: 'white',
-                transition: 'all 0.2s'
+                display: 'flex',
+                gap: '0.75rem',
+                flexDirection: 'row'
               }}
             >
-              Search
-            </Button>
-            <Button 
-              variant="outline" 
-              size="lg" 
-              onClick={handlePopular}
-              style={{
-                borderColor: 'var(--secondary-color)',
-                color: 'var(--secondary-color)',
-                backgroundColor: 'transparent',
-                transition: 'all 0.2s'
-              }}
-            >
-              Popular
-            </Button>
-          </Group>
+              <Button 
+                type="submit" 
+                size="lg" 
+                disabled={!query.trim()}
+                style={{
+                  backgroundColor: 'var(--secondary-color)',
+                  borderColor: 'var(--secondary-color)',
+                  color: 'white',
+                  transition: 'all 0.2s',
+                  flex: 1
+                }}
+              >
+                Search
+              </Button>
+              <Button 
+                variant="outline" 
+                size="lg" 
+                onClick={handlePopular}
+                style={{
+                  borderColor: 'var(--secondary-color)',
+                  color: 'var(--secondary-color)',
+                  backgroundColor: 'transparent',
+                  transition: 'all 0.2s',
+                  flex: 1
+                }}
+              >
+                Popular
+              </Button>
+            </div>
+          </div>
         </form>
       </div>
     </motion.div>

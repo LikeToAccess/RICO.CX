@@ -20,6 +20,7 @@ export const SearchPage: React.FC = () => {
       try {
         setLoading(true);
         setError(null);
+        setResults([]); // Clear previous results immediately
         
         let data: SearchResult[];
         if (query === 'popular') {
@@ -63,9 +64,10 @@ export const SearchPage: React.FC = () => {
             fontFamily: 'Poppins, sans-serif',
             color: '#ffffff',
             textAlign: 'center',
-            fontSize: '2.5rem',
+            fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
             fontWeight: 'bold',
-            margin: '2rem 0'
+            margin: '2rem 0',
+            padding: '0 1rem'
           }}
         >
           {query === 'popular' ? 'Popular Content' : `Search Results for "${decodeURIComponent(query || '')}"`}
@@ -74,7 +76,7 @@ export const SearchPage: React.FC = () => {
         <div style={{ 
           maxWidth: '800px', 
           margin: '0 auto 2rem auto', 
-          padding: '0 2rem' 
+          padding: '0 1rem'
         }}>
           <SearchForm />
         </div>
@@ -91,7 +93,7 @@ export const SearchPage: React.FC = () => {
           <div style={{ 
             maxWidth: '800px', 
             margin: '0 auto', 
-            padding: '0 2rem' 
+            padding: '0 1rem' 
           }}>
             <Alert 
               color="red" 
@@ -134,8 +136,8 @@ export const SearchPage: React.FC = () => {
                 display: 'flex',
                 flexWrap: 'wrap',
                 justifyContent: 'center',
-                paddingLeft: '4.4%',
-                paddingRight: '4.4%',
+                gap: '1rem',
+                padding: '0 1rem',
                 marginTop: '2rem'
               }}
             >

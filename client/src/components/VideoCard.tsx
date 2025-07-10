@@ -56,8 +56,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   const getDownloadButton = () => {
     const buttonStyle = {
       width: '100%',
-      fontSize: '12px',
-      padding: '6px 12px',
+      fontSize: '14px',
+      padding: '8px 16px',
       borderRadius: '4px',
       border: 'none',
       cursor: 'pointer',
@@ -143,9 +143,9 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
     >
       <div style={{ 
         position: 'relative',
-        width: '240px',
-        minWidth: '240px',
-        height: '520px',
+        width: '280px',
+        minWidth: '280px',
+        height: '560px',
         backgroundColor: 'var(--result-card-background-color)',
         border: '1px solid #808080',
         borderRadius: '12px',
@@ -161,14 +161,16 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
           alt={title}
           className="result-thumbnail"
           style={{
-            aspectRatio: '2 / 3',
+            width: '240px',
+            height: '360px',
             borderRadius: 'inherit',
             borderBottomRightRadius: 0,
             borderBottomLeftRadius: 0,
             borderBottom: 'inherit',
-            width: '100%',
             cursor: 'pointer',
-            objectFit: 'cover'
+            objectFit: 'cover',
+            margin: '20px auto 0 auto',
+            display: 'block'
           }}
           onError={(e) => {
             const target = e.currentTarget;
@@ -190,8 +192,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
             right: '12px',
             backgroundColor: 'rgba(49, 130, 206, 0.8)',
             color: 'var(--body-text-color)',
-            fontSize: '12px',
-            padding: '3px 8px',
+            fontSize: '14px',
+            padding: '4px 10px',
             borderRadius: '80vw',
             fontFamily: 'LexendBold, Poppins, sans-serif'
           }}>
@@ -199,68 +201,83 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
           </div>
         )}
 
-        {/* Year Badge */}
-        {year && (
-          <div className="label result-year" style={{
-            position: 'absolute',
-            bottom: '90px',
-            left: '12px',
-            backgroundColor: 'rgba(49, 130, 206, 0.6)',
-            color: 'var(--body-text-color)',
-            fontSize: '14px',
-            padding: '3px 8px',
-            borderRadius: '80vw',
-            fontFamily: 'LexendBold, Poppins, sans-serif'
-          }}>
-            {year}
-          </div>
-        )}
+        {/* Info Pills Grid */}
+        <div style={{
+          position: 'absolute',
+          bottom: '52px',
+          left: '12px',
+          right: '12px',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(60px, 1fr))',
+          gap: '6px',
+          alignItems: 'center'
+        }}>
+          {/* Year Badge */}
+          {year && (
+            <div className="label result-year" style={{
+              backgroundColor: 'rgba(49, 130, 206, 0.6)',
+              color: 'var(--body-text-color)',
+              fontSize: '14px',
+              padding: '4px 10px',
+              borderRadius: '80vw',
+              fontFamily: 'LexendBold, Poppins, sans-serif',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {year}
+            </div>
+          )}
 
-        {/* Score Badge */}
-        {imdbScore && (
-          <div className="label result-score" style={{
-            position: 'absolute',
-            bottom: '60px',
-            left: '12px',
-            backgroundColor: 'rgba(229, 62, 62, 0.8)',
-            color: 'var(--body-text-color)',
-            fontSize: '14px',
-            padding: '3px 8px',
-            borderRadius: '80vw',
-            fontFamily: 'LexendBold, Poppins, sans-serif'
-          }}>
-            ⭐ {imdbScore}
-          </div>
-        )}
+          {/* Score Badge */}
+          {imdbScore && (
+            <div className="label result-score" style={{
+              backgroundColor: 'rgba(229, 62, 62, 0.8)',
+              color: 'var(--body-text-color)',
+              fontSize: '14px',
+              padding: '4px 10px',
+              borderRadius: '80vw',
+              fontFamily: 'LexendBold, Poppins, sans-serif',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              ⭐ {imdbScore}
+            </div>
+          )}
 
-        {/* Duration Badge */}
-        {duration && (
-          <div className="label result-duration" style={{
-            position: 'absolute',
-            bottom: '30px',
-            left: '12px',
-            backgroundColor: 'rgba(0, 181, 216, 0.6)',
-            color: 'var(--body-text-color)',
-            fontSize: '14px',
-            padding: '3px 8px',
-            borderRadius: '80vw',
-            fontFamily: 'LexendBold, Poppins, sans-serif'
-          }}>
-            {duration}min
-          </div>
-        )}
+          {/* Duration Badge */}
+          {duration && (
+            <div className="label result-duration" style={{
+              backgroundColor: 'rgba(0, 181, 216, 0.6)',
+              color: 'var(--body-text-color)',
+              fontSize: '14px',
+              padding: '4px 10px',
+              borderRadius: '80vw',
+              fontFamily: 'LexendBold, Poppins, sans-serif',
+              textAlign: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis'
+            }}>
+              {duration}min
+            </div>
+          )}
+        </div>
 
         {/* Title */}
         <div className="result-title" style={{
           position: 'absolute',
-          textAlign: 'center',
-          bottom: '120px',
+          textAlign: 'left',
+          top: '390px',
           left: '16px',
           right: '16px',
           fontFamily: '"Open Sans", sans-serif',
           color: 'var(--body-text-color)',
-          fontSize: '14px',
-          fontWeight: '500',
+          fontSize: '20px',
+          fontWeight: '600',
           lineHeight: '1.2',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -275,12 +292,12 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
         {(description || genre) && (
           <div className="result-subtitle" style={{
             position: 'absolute',
-            textAlign: 'center',
-            bottom: '95px',
+            textAlign: 'left',
+            top: '430px',
             left: '16px',
             right: '16px',
             fontFamily: '"Open Sans", sans-serif',
-            fontSize: '12px',
+            fontSize: '14px',
             color: 'var(--body-text-color)',
             opacity: 0.8,
             overflow: 'hidden',
