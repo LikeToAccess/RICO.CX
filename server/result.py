@@ -78,7 +78,7 @@ class Result(dict):
 			for title in titles:
 				bad_characters = ["/", "\\", "\"", ":"]
 				for char in bad_characters:
-					title.text = title.text.replace(char, "").encode("ascii", "ignore").decode("ascii").strip()
+					title = title.replace(char, "").encode("ascii", "ignore").decode("ascii").strip()
 
 			return titles
 
