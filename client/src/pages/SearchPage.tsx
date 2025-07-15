@@ -58,27 +58,12 @@ export const SearchPage: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
-        <h1 
-          className="title"
-          style={{
-            fontFamily: 'Poppins, sans-serif',
-            color: '#ffffff',
-            textAlign: 'center',
-            fontSize: 'clamp(1.5rem, 4vw, 2.5rem)',
-            fontWeight: 'bold',
-            margin: '2rem 0',
-            padding: '0 1rem'
-          }}
-        >
-          {query === 'popular' ? 'Popular Content' : `Search Results for "${decodeURIComponent(query || '')}"`}
-        </h1>
-
         <div style={{ 
           maxWidth: '800px', 
           margin: '0 auto 2rem auto', 
           padding: '0 1rem'
         }}>
-          <SearchForm />
+          <SearchForm initialQuery={query !== 'popular' ? decodeURIComponent(query || '') : ''} />
         </div>
 
         {loading && (
