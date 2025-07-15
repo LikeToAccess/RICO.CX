@@ -27,11 +27,6 @@ export default defineConfig({
         target: 'https://127.0.0.1:9000',
         changeOrigin: true,
         secure: false,
-      },
-      '/static': {
-        target: 'https://127.0.0.1:9000',
-        changeOrigin: true,
-        secure: false,
       }
     }
   }
