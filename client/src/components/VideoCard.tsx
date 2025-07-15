@@ -186,24 +186,32 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
           alt={title}
           className="result-thumbnail"
           style={{
-            width: '100%',
-            height: '420px',
+            width: poster.includes('missing_poster') || poster.includes('data:image/svg') ? '200px' : '100%',
+            height: poster.includes('missing_poster') || poster.includes('data:image/svg') ? '200px' : '420px',
+            maxWidth: '100%',
+            maxHeight: '420px',
             borderRadius: 'inherit',
             borderBottomRightRadius: 0,
             borderBottomLeftRadius: 0,
-            borderBottom: 'inherit',
             cursor: 'pointer',
-            objectFit: 'cover',
-            display: 'block'
+            objectFit: poster.includes('missing_poster') || poster.includes('data:image/svg') ? 'contain' : 'cover',
+            objectPosition: 'center',
+            display: 'block',
+            margin: poster.includes('missing_poster') || poster.includes('data:image/svg') ? '110px auto 0' : '0'
           }}
           onError={(e) => {
             const target = e.currentTarget;
             // First fallback: try the server's missing poster
             if (target.src !== "http://localhost:5000/static/img/missing_poster.svg") {
               target.src = "http://localhost:5000/static/img/missing_poster.svg";
+              // Update styles for missing poster
+              target.style.width = '200px';
+              target.style.height = '200px';
+              target.style.objectFit = 'contain';
+              target.style.margin = '110px auto 0';
             } else {
               // Second fallback: use a data URL with a simple gray placeholder
-              target.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDMwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSI0NTAiIGZpbGw9IiM0YTRhNGEiLz48dGV4dCB4PSIxNTAiIHk9IjIyNSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gUG9zdGVyPC90ZXh0Pjwvc3ZnPg==";
+              target.src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9IiM0YTRhNGEiLz48dGV4dCB4PSIxMDAiIHk9IjEwMCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+Tm8gUG9zdGVyPC90ZXh0Pjwvc3ZnPg==";
             }
           }}
         />
