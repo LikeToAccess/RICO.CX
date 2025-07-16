@@ -3,7 +3,7 @@ import json
 import time
 import concurrent.futures
 from threading import Lock
-#import os
+import os
 
 # Expanded list of movie names to process - SUPER SPEED TEST! 🚀
 movie_names = [
@@ -287,13 +287,17 @@ def process_single_movie(name):
             'error': str(e)
         }
 
-# SPEED SETTINGS - OPTIMIZED FOR LARGE SCALE TESTING! 🚀
-BATCH_SIZE = 8  # Optimal batch size for reliability and speed
-MAX_WORKERS = 20  # Parallel workers for large dataset processing
+# SPEED SETTINGS - CPU CORE SCALED FOR OPTIMAL PERFORMANCE! 🚀
+# Scale workers based on CPU cores
+CPU_CORES = os.cpu_count()
+MAX_WORKERS = min(CPU_CORES * 4, 32)  # 4x cores but cap at 32 for I/O bound tasks
+BATCH_SIZE = max(4, CPU_CORES // 2)   # Scale batch size with cores
 
-print("🚀 SUPER SPEED FileBot Test - LARGE SCALE BATCH TESTING! 🚀")
-print(f"📊 Processing {len(movie_names)} movies with {MAX_WORKERS} parallel workers")
-print(f"⚡ Batch size: {BATCH_SIZE} movies per batch")
+print("🚀 SUPER SPEED FileBot Test - CPU CORE SCALED BATCH TESTING! 🚀")
+print(f"�️  Detected {CPU_CORES} CPU cores")
+print(f"⚡ Using {MAX_WORKERS} workers (scaled from {CPU_CORES} cores)")
+print(f"📦 Batch size: {BATCH_SIZE} (scaled from cores)")
+print(f"📊 Processing {len(movie_names)} movies with CPU-optimized settings")
 print(f"🔥 Total subprocess calls: {len(movie_names) // BATCH_SIZE + (1 if len(movie_names) % BATCH_SIZE else 0)} (vs {len(movie_names)} individual)")
 print(f"📈 Expected performance gain: {len(movie_names) / (len(movie_names) // BATCH_SIZE + (1 if len(movie_names) % BATCH_SIZE else 0)):.1f}x fewer calls!")
 print("=" * 80)
@@ -347,7 +351,10 @@ total_time = end_time - start_time
 movies_per_second = len(movie_names) / total_time if total_time > 0 else 0
 
 print("\n" + "=" * 80)
-print("🏁 LARGE SCALE BATCH PERFORMANCE RESULTS 🏁")
+print("🏁 CPU-SCALED BATCH PERFORMANCE RESULTS 🏁")
+print(f"🖥️  CPU cores detected: {CPU_CORES}")
+print(f"⚡ Workers used: {MAX_WORKERS} ({MAX_WORKERS/CPU_CORES:.1f}x cores)")
+print(f"📦 Batch size used: {BATCH_SIZE}")
 print(f"⏱️  Total time: {total_time:.2f} seconds")
 print(f"🎬 Movies processed: {len(movie_names)}")
 print(f"✅ Successful matches: {len(corrected_movies)}")
@@ -356,7 +363,7 @@ print(f"🚀 Processing speed: {movies_per_second:.2f} movies per second")
 print(f"⚡ Average time per movie: {total_time/len(movie_names):.3f} seconds")
 print(f"📦 Batches processed: {len(movie_batches)}")
 print(f"🔥 Batch efficiency: {len(movie_names)/len(movie_batches):.1f} movies per batch")
-print(f"💪 Performance improvement: {len(movie_names)/len(movie_batches):.1f}x fewer subprocess calls!")
+print(f"💪 Performance improvement: {len(movie_batches):.0f} batches vs {len(movie_names)} individual calls!")
 print("=" * 80)
 
 print("\n🎯 Sample of corrected names (showing first 10 and last 10):")
