@@ -5,8 +5,8 @@
 		--body-color: #444444;
 		--body-text-color: #FFF;
 		--body-background-color: #E3F2FD ;
-		--body-background-image: url(/static/img/background-1-light-landscape-bottom-gradient.png);
-		--body-background-image-narrow: url(/static/img/background-1-light-portrait.png);
+		--body-background-image: url(../img/background-2-dark-landscape-bottom-gradient.png);
+		--body-background-image-narrow: url(../img/background-2-dark-landscape-bottom-gradient.png);
 		--primary-color: #FFF;
 		--secondary-color: #2289FF;
 		--background-color: #EFEFEF;
@@ -22,8 +22,8 @@
 		--body-color: #EEE;
 		--body-text-color: #EEE;
 		--body-background-color: #131313;
-		--body-background-image: url(/static/img/background-2-dark-landscape-bottom-gradient.png);
-		--body-background-image-narrow: url(/static/img/background-2-dark-portrait-bottom-gradient.png);
+		--body-background-image: url(../img/background-2-dark-landscape-bottom-gradient.png);
+		--body-background-image-narrow: url(../img/background-2-dark-landscape-bottom-gradient.png);
 		--primary-color: #A5A5A5;
 		--secondary-color: #3F3F3F;
 		--background-color: #292929;

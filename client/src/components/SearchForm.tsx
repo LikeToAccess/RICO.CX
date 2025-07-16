@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { TextInput, Button } from '@mantine/core';
 import { IconSearch } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
-export const SearchForm: React.FC = () => {
-  const [query, setQuery] = useState('');
+interface SearchFormProps {
+  initialQuery?: string;
+}
+
+export const SearchForm: React.FC<SearchFormProps> = ({ initialQuery = '' }) => {
+  const [query, setQuery] = useState(initialQuery);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    setQuery(initialQuery);
+  }, [initialQuery]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

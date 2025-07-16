@@ -9,7 +9,7 @@
   --mantine-color-dark-7: #1a1a1a;
   
   /* Force specific colors regardless of system preference */
-  --body-background-color: #2a2a2a;
+  /* Removed --body-background-color override to use variables.css */
   --body-text-color: #ffffff;
   --title-text-color: #ffffff;
   --background-color: #3a3a3a;
@@ -21,8 +21,12 @@
 
 /* Global body styling - force consistent appearance */
 body {
-  background-color: #2a2a2a !important;
-  background-image: none !important;
+  background-color: var(--body-background-color) !important;
+  background-image: var(--body-background-image) !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-attachment: fixed !important;
   color: #ffffff !important;
   font-family: "Poppins", sans-serif !important;
   min-height: 100vh;
@@ -120,7 +124,7 @@ body {
   margin: 0 !important;
   padding: 0 !important;
   min-height: 100vh;
-  background: #2a2a2a !important;
+  background: transparent !important;
 }
 
 /* Custom table styling with forced colors */
@@ -165,7 +169,6 @@ body {
 
 .admin-card:hover {
   transform: scale(1.02);
-  background-color: rgba(58, 58, 58, 1) !important;
 }
 
 /* Title styling with forced colors */
