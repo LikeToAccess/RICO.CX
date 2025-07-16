@@ -580,12 +580,12 @@ def download_api(
 			"video_data": video_data.sanatize(),
 			"id": result_id}, 200
 	download_engine.create(
-		filename.replace(ROOT_LIBRARY_LOCATION, "").strip("/\\"),
+		filename.replace(ROOT_LIBRARY_LOCATION, "").strip("/\\") + ".crdownload",
 		video_url,
 		user_id,
 		download_quality=video_data.get("quality_tag")
 	)
-	download_engine.queue.append({"url": video_url, "filename": filename.replace(ROOT_LIBRARY_LOCATION, "").strip("/\\")})
+	download_engine.queue.append({"url": video_url, "filename": filename.replace(ROOT_LIBRARY_LOCATION, "").strip("/\\") + ".crdownload"})
 	download_engine.start()
 	try:
 		if os.path.exists(filename):
