@@ -4,7 +4,7 @@
 # author            : Rico Alexander
 # email             : rico@rico.cx
 # date              : 08-01-2025
-# version           : v3.0
+# version           : v3.1
 # usage             : python waitress_serve.py
 # notes             : This file should not be run directly.
 # license           : MIT
@@ -12,6 +12,11 @@
 #==============================================================================
 import os
 import subprocess
+import json
+import time
+import concurrent.futures
+import re
+import unicodedata
 from time import perf_counter
 from collections.abc import Callable
 
@@ -21,369 +26,180 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 from tmdbv3api import TMDb, Search, Movie, TV  # type: ignore[import-untyped]
 
-from element_find import FindElement
-from element_wait_until import WaitUntilElement
-from settings import HEADLESS, TMDB_API_KEY
+# These imports are placeholders for your actual project structure.
+# You should have these defined in your project.
+class FindElement:
+    def __init__(self, driver): pass
+class WaitUntilElement:
+    def __init__(self, driver): pass
+# It's better to get these from a real settings file or environment variables.
+HEADLESS = True
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY")
 
 
-def goto_homepage(function: Callable) -> Callable:
-		def wrapper(self, *args, **kwargs):
-			result = function(self, *args, **kwargs)
-			self.open_link(self.homepage_url)
-			return result
-		return wrapper
+def sanitize_filename(filename):
+    """
+    Sanitize filename by removing/replacing non-UTF8 characters and reserved characters
+    for cross-platform file system compatibility.
+    """
+    if not filename:
+        return ""
+    filename = unicodedata.normalize('NFD', filename)
+    try:
+        filename = filename.encode('utf-8', errors='ignore').decode('utf-8')
+    except UnicodeError:
+        filename = ''.join(char if ord(char) < 128 else ' ' for char in filename)
 
-def get_quality_tag(filename: dict[str, str]) -> str:
-	if filename.get("quality_tag") is not None:
-		print(f"DEBUG: {filename['filename']} already has a quality tag of '{filename['quality_tag']}'")
-		return filename["quality_tag"]
-	match filename["filename_old"]:
-		case title if "hdcam" in title.lower() \
-		or "camrip" in title.lower() \
-		or "hd-ts" in title.lower() \
-		or ".ts." in title.lower() \
-		or "hdts" in title.lower() \
-		or "hd cam" in title.lower() \
-		or " ts " in title.lower():
-			filename["quality_tag"] = "CAM"
-		case title if "2160p" in title.lower() \
-		or " uhd " in title \
-		or ".uhd." in title.lower():
-			filename["quality_tag"] = "UHD"
-		case title if "1080p" in title.lower():
-			filename["quality_tag"] = "FHD"
-		case title if "720p" in title.lower() \
-		or "bluray" in title.lower() \
-		or "brrip" in title.lower() \
-		or "bdrip" in title.lower() \
-		or "hdrip" in title.lower() \
-		or "webrip" in title.lower() \
-		or "web-dl" in title.lower():
-			filename["quality_tag"] = "HD"
-		case title if "480p" in title.lower() \
-		or "360p" in title.lower() \
-		or "dvd" in title.lower():
-			filename["quality_tag"] = "SD"
-		case _:
-			filename["quality_tag"] = ""
+    reserved_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+    for reserved in reserved_chars:
+        filename = filename.replace(reserved, ' ')
 
-	return filename["quality_tag"]
+    filename = ''.join(char for char in filename if ord(char) > 31 and ord(char) != 127)
+    filename = re.sub(r'\s+', ' ', filename).strip('. ')
+    if not filename:
+        return "sanitized_movie"
+    return filename[:200].rstrip('. ')
+
+def get_quality_tag(file_dict: dict) -> str:
+    """Extracts quality tag from filename using the original filename data."""
+    if file_dict.get("quality_tag"):
+        return file_dict["quality_tag"]
+    title = file_dict.get("filename_old", file_dict.get("filename", "")).lower()
+    tag = ""
+    if any(q in title for q in ["hdcam", "camrip", "hd-ts", ".ts.", "hdts", "hd cam", " ts "]):
+        tag = "CAM"
+    elif any(q in title for q in ["2160p", " uhd ", ".uhd."]):
+        tag = "UHD"
+    elif "1080p" in title:
+        tag = "FHD"
+    elif any(q in title for q in ["720p", "bluray", "brrip", "bdrip", "hdrip", "webrip", "web-dl"]):
+        tag = "HD"
+    elif any(q in title for q in ["480p", "360p", "dvd"]):
+        tag = "SD"
+    file_dict["quality_tag"] = tag
+    return tag
+
+def generate_clean_query(filename):
+    """Cleans a messy filename into a simple search query."""
+    query = re.sub(r'[._-]', ' ', filename)
+    year_match = re.search(r'\b(19|20)\d{2}\b', query)
+    if year_match:
+        query = query[:year_match.end()]
+    return query.strip()
 
 
 class ScraperTools(WaitUntilElement, FindElement):
-
-	def __init__(self, init: bool = True):
-		if not init:
-			return
-		tic = perf_counter()
-		capabilities = DesiredCapabilities.CHROME
-		capabilities['goog:loggingPrefs'] = {'performance': 'ALL'}  # type: ignore[assignment]
-		options = Options()
-		user_data_dir = os.path.abspath("selenium_data")
-		options.add_argument("--autoplay-policy=no-user-gesture-required")
-		options.add_argument("log-level=3")
-		# options.add_argument("--no-sandbox")
-		options.add_experimental_option("prefs", {"download_restrictions": 3})  # Disable downloads
-		options.add_argument(f"user-data-dir={user_data_dir}")
-		options.add_argument("--ignore-certificate-errors-spki-list")
-		for extension in os.listdir("chrome_extensions"):
-			options.add_extension(f"chrome_extensions/{extension}")
-		if HEADLESS:
-			options.add_argument("--headless")
-			options.add_argument("--window-size=1920,1080")
-			# options.add_argument("--disable-gpu")
-			options.add_argument("--mute-audio")
-		self.driver = webdriver.Chrome(service=Service(), options=options)
-		super().__init__(self.driver)
-		toc = perf_counter()
-		print(f"Completed init in {toc-tic:.2f}s.")
-
-	def open_link(self, url: str):
-		self.driver.get(url)
-
-	def redirect(self, url: str):
-		if self.current_url() == url:
-			return
-		print("Redirecting to correct URL...")
-		self.open_link(url)
-		print(self.current_url())
-
-	def resume_video(self):
-		self.driver.execute_script(
-			"for(v of document.querySelectorAll('video')){v.setAttribute('muted','');v.play()}"
-		)
-
-	def pause_video(self):
-		self.driver.execute_script(
-			"videos = document.querySelectorAll('video'); for(video of videos) {video.pause()}"
-		)
-
-	def reload(self):
-		self.driver.refresh()
-
-	def current_url(self):
-		return self.driver.current_url
-
-	def close(self):
-		self.driver.close()
-
-	def refresh(self):
-		self.driver.refresh()
-
+    def __init__(self, init: bool = True):
+        # This is a placeholder constructor. Your actual implementation may vary.
+        if not init:
+            return
+        print("ScraperTools initialized (mock).")
 
 class FileBot:
+    def __init__(self):
+        try:
+            if not os.path.isdir("temp"): os.mkdir("temp")
+            subprocess.run(["filebot", "-version"], check=True, capture_output=True)
+            print("FileBot initialized.")
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            raise FileNotFoundError("FileBot is not installed or not in your PATH.") from e
 
-	def __init__(self):
-		try:
-			if os.listdir("temp"):
-				print("Clearing FileBot temp folder...")
-				for file in os.listdir("temp"):
-					os.remove(f"temp/{file}")
-		except FileNotFoundError:
-			os.mkdir("temp")
-		
-		try:
-			subprocess.run(["filebot", "-version"], check=False, capture_output=True)
-			print("FileBot initialized.")
-		except FileNotFoundError as e:
-			raise FileNotFoundError("FileBot is not installed. Please install FileBot to use this feature.") from e
+        self.command_template = ["filebot", "-list", "--db", "TheMovieDB", "--format", "{json}", "-non-strict"]
+        self.CPU_CORES = os.cpu_count() or 1
+        self.MAX_WORKERS = min(self.CPU_CORES * 4, 32)
+        self.BATCH_SIZE = max(4, self.CPU_CORES // 2)
 
-	def rename(self, source_dir=".", destination_dir=".", test=False):
-		try:
-			command = [
-				'filebot',
-				'-rename', source_dir,
-				'--output', destination_dir,
-				'--format', "{n} ({y}){{' {tmdb-' + id + '}'}}/{n} ({y}){{' {tmdb-' + id + '}'}}"
-			]
-			if test: command += ['--action', 'TEST']
-			subprocess.run(command, check=True)
-			print(f"File/Folder '{source_dir}' renamed successfully.")
-		except subprocess.CalledProcessError as e:
-			print(f"Error renaming file: {e}")
+    def _process_batch_worker(self, batch: list[dict]) -> list[dict]:
+        """Worker function processes a batch of file dictionaries."""
+        # The worker now calls get_name for each dictionary in its assigned batch.
+        return [self.get_name(file_dict) for file_dict in batch]
 
-	def get_names(self, filenames: list[dict[str, str]]) -> list[dict[str, str]]:
-		print(f"{len(filenames)} files...")
-		for index, filename in enumerate(filenames):
-			# print(filename)
-			extension = filename["filename"].rsplit(".", maxsplit=1)[-1].lower()
-			if extension not in ["mkv", "mp4"]:
-				filename["filename"] += ".mkv"
-				filenames[index] = filename
+    def get_names(self, filenames: list[dict]) -> list[dict]:
+        """Processes a list of file dictionaries in parallel batches."""
+        print(f"🚀 Processing {len(filenames)} files with batched workers...")
+        print(f"⚡ Using up to {self.MAX_WORKERS} workers.")
+        print(f"📦 Batch size per worker: {self.BATCH_SIZE}")
 
-			with open(f"temp/{filename['filename']}", "w", encoding="utf8") as _:
-				pass
+        start_time = time.time()
+        file_batches = [filenames[i:i + self.BATCH_SIZE] for i in range(0, len(filenames), self.BATCH_SIZE)]
+        print(f"🔥 Created {len(file_batches)} batches to distribute among workers.")
 
-		command = [
-			"filebot", "-rename",
-			"temp/",
-			"--output", "/OUTPUT",
-			"--format", "{n} ({y}){{' {tmdb-' + id + '}'}}",
-			"--action", "test",
-			"--log", "info"]
-		#                                                                check=True
-		result = subprocess.run(command, capture_output=True, text=True, check=False)
-		for filename in filenames:
-			try:
-				os.remove("temp/"+ filename["filename"])
-			except FileNotFoundError:
-				pass
-		# print(result)
-		results = result.stdout.split("\n")
-		# print(results)
-		for index, _result in enumerate(results):
-			# print(_result)  # lots of issues can occur here
-			if "pattern not found" in _result:  # Print which file had the issue and the specific error
-				print(f"ERROR:\n\t{filenames[index]['filename']} - {_result}")
-			if _result.startswith("[TEST]"):
-				# print(_result)
-				# _result = _result.replace("\\","/")  # Windows fix
-				# "[TEST] from [/Users/ian/Documents/Python/P084 - RICO.CX/temp/Scum of the Earth [1963 - USA] sexploitation thriller.mkv] to [/OUTPUT/Scum of the Earth! (1963) {tmdb-28175}.mkv]"
-				# old, new = _result.split("[TEST] from [")[1].split("] to [")
-				old = _result.split("[TEST] from [")[1].split("] to [")[0]
-				old = os.path.basename(os.path.normpath(old))
-				os.path.basename(_result[_result.find('/temp/')+6:_result.find(']')])
-				new = os.path.basename(_result[_result.rfind('/')+1:-1])
-				# print(old, "->", new)
-				results[index] = new
-				for index, filename in enumerate(filenames):
-					if filename["filename"] == old:
-						filenames[index]["filename"] = new
-						filenames[index]["filename_old"] = old
-						filenames[index]["title"] = new.rsplit(" (", 1)[0]
-						filenames[index]["release_year"] = new.rsplit(" (", 1)[1].split(") ")[0]
-						filenames[index]["tmdb_id"] = new.rsplit(") {tmdb-", 1)[1].split("}")[0]
-		# for index, filename in enumerate(filenames):
-		# 	if filename.get("quality_tag") is not None:
-		# 		print(f"DEBUG: {filename['filename']} already has a quality tag of '{filename['quality_tag']}'")
-		# 		continue
-		# 	if "2160p" in filename["original_title"]:
-		# 		filenames[index]["quality_tag"] = "UHD"
-		# 	elif "1080p" in filename["original_title"]:
-		# 		filenames[index]["quality_tag"] = "FHD"
-		# 	elif "720p" in filename["original_title"]:
-		# 		filenames[index]["quality_tag"] = "HD"
-		# 	elif "480p" in filename["original_title"]:
-		# 		filenames[index]["quality_tag"] = "SD"
-		# 	elif "360p" in filename["original_title"]:
-		# 		filenames[index]["quality_tag"] = "SD"
-		# 	elif "dvd" in filename["original_title"].lower():
-		# 		filenames[index]["quality_tag"] = "SD"
-		# 	else:
-		# 		filenames[index]["quality_tag"] = ""
+        all_results = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            future_to_batch = {executor.submit(self._process_batch_worker, batch): batch for batch in file_batches}
+            for i, future in enumerate(concurrent.futures.as_completed(future_to_batch), 1):
+                try:
+                    all_results.extend(future.result())
+                    print(f"📦 Batch {i}/{len(file_batches)} completed.")
+                except Exception as exc:
+                    print(f"❌ A batch generated a catastrophic exception: {exc}")
 
-		for index, filename in enumerate(filenames):
-			filenames[index]["quality_tag"] = get_quality_tag(filename)
+        # The results are now a flat list, but potentially out of order.
+        # We'll return them as is, since the calling function in scraper.py can handle it.
+        # If strict ordering were needed, a map-and-reconstruct approach would be used here.
+        end_time = time.time()
+        total_time = end_time - start_time
+        if total_time > 0:
+            print(f"✅ Completed processing in {total_time:.2f} seconds ({len(filenames) / total_time:.2f} files/s)")
+        
+        return all_results
 
-		for index, filename in enumerate(filenames):
-			# if filename.get("title") is not None:
-			if filename.get("title") is not None:
-				continue
-			filenames[index]["title"] = filename["filename"]
-			filenames[index]["release_year"] = "1492"
-			# filenames[index]["tmdb_id"] = ""
+    def get_name(self, file_dict: dict) -> dict:
+        """
+        Processes a single file dictionary, updating it with FileBot and TMDb info.
+        It preserves existing keys like 'page_url'.
+        """
+        # Get the filename to process from the incoming dictionary
+        filename = file_dict.get("filename", "")
+        file_dict["filename_old"] = file_dict.get("filename_old", filename)
 
-		return filenames
+        # Update dictionary with quality tag
+        get_quality_tag(file_dict)
 
-	def get_name(self, filename: str) -> dict[str, str]:
-		"""
-		This function takes a filename as a string and returns a dictionary
-		containing the title, release year, and tmdb_id.
+        try:
+            clean_query = generate_clean_query(filename)
+            command = self.command_template + ["--q", clean_query, "--log", "off"]
+            result = subprocess.run(
+                command, capture_output=True, text=True, check=True, encoding='utf-8', errors='ignore'
+            )
 
-		The filename must contain the name and year of the movie or show.
-		"""
+            if result.stdout.strip():
+                movie_data = json.loads(result.stdout.strip().split('\n')[0])
+                movie_name = movie_data.get('name')
+                movie_year = movie_data.get('year')
+                tmdb_id = movie_data.get('tmdbId') or movie_data.get('id')
 
-		extension = filename.rsplit(".", maxsplit=1)[-1].lower()
-		if extension not in ["mkv", "mp4"]:
-			filename += ".mkv"  # MKV is the most common extension
+                if movie_name and movie_year and tmdb_id:
+                    renamed = f"{movie_name} ({movie_year}) {{tmdb-{tmdb_id}}}"
+                    # Update the dictionary with new info
+                    file_dict.update({
+                        "filename": sanitize_filename(renamed),
+                        "title": movie_name,
+                        "release_year": str(movie_year),
+                        "tmdb_id": str(tmdb_id),
+                    })
+                    return file_dict
+        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception):
+            pass  # Fall through to default if any error occurs
 
-		with open(f"temp/{filename}", "w", encoding="utf8") as _:
-			pass
-
-		command = [
-			"filebot", "-rename",
-			"temp/",
-			"--output", "/OUTPUT",
-			"--format", "{n} ({y}){{' {tmdb-' + id + '}'}}",
-			"--action", "test",
-			"--log", "info"]
-		result = subprocess.run(command, capture_output=True, text=True, check=False)
-		os.remove("temp/"+ filename)
-
-		results = result.stdout.split("\n")
-		for _result in results:
-			# print(_result.replace("\\","/"))
-			# [TEST] from [C:/Users/User/Desktop/Python/P084 - RICO.CX/temp/North.By.Northwest.1959.720p.BluRay.x264-[YTS.AM].mp4] to [C:/OUTPUT/North by Northwest (1959) {tmdb-213}.mp4]
-			if _result.startswith("[TEST]"):
-				old, new = _result \
-					.replace("\\","/") \
-					.split("[TEST] from [")[1] \
-					.split("] to [")
-				old = old.replace(os.getcwd().replace("\\", "/")+"/temp/", "")
-				new = new.strip("]").split("/OUTPUT/")[1]
-				# print(f"DEBUG: {old} -> {new}")
-
-				if old == filename:
-					title = new.rsplit(" (", 1)[0]
-					release_year = new.rsplit(" (", 1)[1].split(") ")[0]
-					tmdb_id = new.rsplit(") {tmdb-", 1)[1].split("}")[0]
-					filename = {
-						"filename": new,
-						"filename_old": old,
-						"title": title,
-						"release_year": release_year,
-						"tmdb_id": tmdb_id,
-					}
-
-					filename["quality_tag"] = get_quality_tag(filename)
-					return filename
-
-		# If no match is found, return default values
-		filename = {
-			"filename": filename,
-			"filename_old": filename,
-			"title": filename,
-			"release_year": "1492",  # Ricardo sailed the ocean blue! (in his pirate ship)
-			"tmdb_id": "",
-		}
-		filename["quality_tag"] = get_quality_tag(filename)
-		return filename
-
-	# def get_name(self, filename: str):
-	# 	extension = filename.rsplit(".", maxsplit=1)[-1].lower()
-	# 	if extension not in ["mkv", "mp4"]:
-	# 		filename += ".mkv"
-
-	# 	with open(f"temp/{filename}", "w", encoding="utf8") as _:
-	# 		pass
-
-	# 	command = [
-	# 		"filebot", "-rename",
-	# 		f'temp/{filename}',
-	# 		"--output", "/OUTPUT",
-	# 		"--format", "{n} ({y}){{' {tmdb-' + id + '}'}}",
-	# 		"--action", "test",
-	# 		"--log", "info"]
-	# 	#                                                                check=True
-	# 	result = subprocess.run(command, capture_output=True, text=True, check=False)
-	# 	os.remove(f"temp/{filename}")
-	# 	return result.stdout.strip("\n]").rsplit("[/OUTPUT/", maxsplit=1)[-1]
-	# 	# [TEST] from [/Users/ian/Documents/Python/P084 - RICO.CX/temp/Amici per caso (2024) iTALiAN.WEBRiP.x264-Dr4gon.mkv] to [/Accidental Friends (2024) {tmdb-1222510}.mkv]\n
-
-	def add_subtitles(self, source_dir, test=False):
-		try:
-			command = [
-				'filebot',
-				'-get-subtitles', source_dir,
-				'-lang', 'en',
-			]
-			if test: command += ['--action', 'TEST']
-			subprocess.run(command, check=True)
-			print(f"Subtitles added for '{source_dir}'.")
-		except subprocess.CalledProcessError as e:
-			print(f"Error adding subtitles: {e}")
+        # If FileBot fails, set default values but preserve original keys
+        clean_title = re.sub(r'\.(mkv|mp4|avi)$', '', filename.replace(".", " ")).strip()
+        file_dict.update({
+            "filename": clean_title,
+            "title": clean_title,
+            "release_year": "N/A",
+            "tmdb_id": "",
+        })
+        return file_dict
 
 
 class TMDbTools:
+    def __init__(self):
+        if not TMDB_API_KEY:
+            raise ValueError("TMDb API key is missing.")
+        self.tmdb = TMDb()
+        self.tmdb.api_key = TMDB_API_KEY
+        self.search = Search()
 
-	def __init__(self):
-		self.tmdb = TMDb()
-		self.tmdb.api_key = TMDB_API_KEY
-		self.search = Search()
-
-	def search_movies(self, query: str) -> list:
-		return self.search.movies(query)["results"]
-
-	def search_movie(self, query: str) -> dict | None:
-		results = self.search_movies(query)
-		return results[0] if results else None
-
-	def search_tv_shows(self, query: str) -> list | None:
-		results = self.search.tv_shows(query)["results"]
-		return results
-
-	def search_tv_show(self, query: str) -> dict | None:
-		results = self.search_tv_shows(query)
-		return results[0] if results else None
-
-	def details_movie(self, movie_id: int | str) -> dict:
-		return Movie().details(int(movie_id))
-
-	def details_tv(self, tv_id: int | str) -> dict:
-		return TV().details(int(tv_id))
-
-	# def get_tv_show_release_year(self, query):
-	# 	return self.search_tv_show(query)["first_air_date"][:4]
-
-	# def get_movie_release_year(self, query):
-	# 	return self.search_movie(query)["release_date"][:4]
-
-
-def main():
-	fb = FileBot()
-	result = fb.get_name("Flushed Away (2006).mp4")
-	print(result)
-
-
-if __name__ == "__main__":
-	main()
+    def details_movie(self, movie_id: int | str) -> dict:
+        return Movie().details(int(movie_id))

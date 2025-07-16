@@ -4,6 +4,52 @@ import time
 import concurrent.futures
 from threading import Lock
 import os
+import re
+import unicodedata
+
+def sanitize_filename(filename):
+    """
+    Sanitize filename by removing/replacing non-UTF8 characters and reserved characters
+    for cross-platform file system compatibility.
+    """
+    if not filename:
+        return filename
+    
+    # Normalize unicode characters (NFD = decomposed form)
+    filename = unicodedata.normalize('NFD', filename)
+    
+    # Remove non-ASCII characters that can't be encoded properly
+    try:
+        filename = filename.encode('utf-8', errors='ignore').decode('utf-8')
+    except UnicodeError:
+        # Fallback: replace problematic characters with spaces
+        filename = ''.join(char if ord(char) < 128 else ' ' for char in filename)
+    
+    # Windows/filesystem reserved characters - replace with spaces
+    reserved_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+    
+    # Replace reserved characters with spaces
+    for reserved in reserved_chars:
+        filename = filename.replace(reserved, ' ')
+    
+    # Remove control characters (0-31, 127)
+    filename = ''.join(char for char in filename if ord(char) > 31 and ord(char) != 127)
+    
+    # Clean up multiple consecutive spaces and normalize whitespace
+    filename = re.sub(r'\s+', ' ', filename)
+    
+    # Remove leading/trailing dots and spaces (problematic on Windows)
+    filename = filename.strip('. ')
+    
+    # Ensure filename isn't empty after sanitization
+    if not filename:
+        filename = "sanitized_movie"
+    
+    # Truncate if too long (Windows has 260 char path limit, be conservative)
+    if len(filename) > 200:
+        filename = filename[:200].rstrip('. ')
+    
+    return filename
 
 # Expanded list of movie names to process - SUPER SPEED TEST! 🚀
 movie_names = [
@@ -43,143 +89,7 @@ movie_names = [
     "top gun maverick",
     "black panther 2018",
     "wonder woman 2017",
-    "aquaman 2018",
-    "batman begins 2005",
-    "superman 1978",
-    "spiderman 2002",
-    "x-men 2000",
-    "fantastic four 2005",
-    "thor 2011",
-    "captain america first avenger",
-    "guardians of the galaxy",
-    "ant-man 2015",
-    "doctor strange 2016",
-    "black widow 2021",
-    "eternals 2021",
-    "shang-chi 2021",
-    "fast and furious 2001",
-    "mission impossible 1996",
-    "transformers 2007",
-    "pacific rim 2013",
-    "godzilla 2014",
-    "king kong 2005",
-    "star trek 2009",
-    "independence day 1996",
-    "die hard 1988",
-    "lethal weapon 1987",
-    "predator 1987",
-    "robocop 1987",
-    "total recall 1990",
-    "basic instinct 1992",
-    "heat 1995",
-    "the rock 1996",
-    "con air 1997",
-    "face off 1997",
-    "armageddon 1998",
-    "deep impact 1998",
-    "saving private ryan 1998",
-    "the mummy 1999",
-    "gladiator 2000",
-    "cast away 2000",
-    "minority report 2002",
-    "signs 2002",
-    "the bourne identity 2002",
-    "kill bill volume 1",
-    "kill bill volume 2",
-    "collateral 2004",
-    "crash 2004",
-    "million dollar baby 2004",
-    "batman begins 2005",
-    "war of the worlds 2005",
-    "crash 2005",
-    "the prestige 2006",
-    "300 2007",
-    "no country for old men 2007",
-    "there will be blood 2007",
-    "the bourne ultimatum 2007",
-    "wall-e 2008",
-    "slumdog millionaire 2008",
-    "the curious case of benjamin button 2008",
-    "district 9 2009",
-    "up 2009",
-    "inglourious basterds 2009",
-    "zombieland 2009",
-    "shutter island 2010",
-    "toy story 3 2010",
-    "social network 2010",
-    "true grit 2010",
-    "black swan 2010",
-    "source code 2011",
-    "super 8 2011",
-    "drive 2011",
-    "moneyball 2011",
-    "the artist 2011",
-    "the avengers 2012",
-    "skyfall 2012",
-    "django unchained 2012",
-    "life of pi 2012",
-    "argo 2012",
-    "zero dark thirty 2012",
-    "gravity 2013",
-    "12 years a slave 2013",
-    "her 2013",
-    "wolf of wall street 2013",
-    "captain america winter soldier",
-    "guardians of the galaxy 2014",
-    "birdman 2014",
-    "whiplash 2014",
-    "gone girl 2014",
-    "the grand budapest hotel 2014",
-    "ex machina 2015",
-    "the revenant 2015",
-    "spotlight 2015",
-    "the big short 2015",
-    "bridge of spies 2015",
-    "la la land 2016",
-    "moonlight 2016",
-    "manchester by the sea 2016",
-    "arrival 2016",
-    "hacksaw ridge 2016",
-    "hell or high water 2016",
-    "get out 2017",
-    "the shape of water 2017",
-    "three billboards outside ebbing missouri",
-    "lady bird 2017",
-    "phantom thread 2017",
-    "call me by your name 2017",
-    "green book 2018",
-    "bohemian rhapsody 2018",
-    "a star is born 2018",
-    "vice 2018",
-    "roma 2018",
-    "the favourite 2018",
-    "1917 2019",
-    "jojo rabbit 2019",
-    "little women 2019",
-    "marriage story 2019",
-    "the irishman 2019",
-    "ford v ferrari 2019",
-    "nomadland 2020",
-    "minari 2020",
-    "promising young woman 2020",
-    "sound of metal 2020",
-    "the trial of the chicago 7 2020",
-    "mank 2020",
-    "coda 2021",
-    "the power of the dog 2021",
-    "west side story 2021",
-    "king richard 2021",
-    "dont look up 2021",
-    "licorice pizza 2021",
-    "everything everywhere all at once 2022",
-    "top gun maverick 2022",
-    "tar 2022",
-    "the banshees of inisherin 2022",
-    "elvis 2022",
-    "avatar the way of water 2022",
-    "this is a fake movie 12345", # Example of a movie that won't be found
-    "another fake movie 98765",
-    "nonexistent film 2023"
+    "John.Wick.3.2019.1080p.Bluray.X264-EVO"
 ]
 
 # Thread-safe results storage
@@ -229,9 +139,11 @@ def process_movie_batch(movie_batch):
                         
                         if movie_name and movie_year and tmdb_id:
                             output_string = f"{movie_name} ({movie_year}) {{tmdb-{tmdb_id}}}"
+                            # Sanitize the output string for filesystem compatibility
+                            sanitized_output = sanitize_filename(output_string)
                             batch_results.append({
                                 'query': movie_batch[i] if i < len(movie_batch) else f"batch_item_{i}",
-                                'result': output_string,
+                                'result': sanitized_output,
                                 'success': True
                             })
                         
@@ -266,9 +178,11 @@ def process_single_movie(name):
             
             if movie_name and movie_year and tmdb_id:
                 output_string = f"{movie_name} ({movie_year}) {{tmdb-{tmdb_id}}}"
+                # Sanitize the output string for filesystem compatibility
+                sanitized_output = sanitize_filename(output_string)
                 return {
                     'query': name,
-                    'result': output_string,
+                    'result': sanitized_output,
                     'success': True
                 }
         
