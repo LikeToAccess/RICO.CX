@@ -68,8 +68,8 @@ export const SearchPage: React.FC = () => {
 
         {loading && (
           <Center h={300}>
-            <div className="preloader">
-              <Loader size="lg" color="var(--secondary-color)" />
+            <div className="preloader" style={{ filter: 'drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2))' }}>
+              <Loader size="xl" color="var(--secondary-color)" />
             </div>
           </Center>
         )}
