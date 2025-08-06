@@ -155,9 +155,30 @@ class DownloadEngine(Download):
 			# Test Download: magnet:?xt=urn:btih:1956E238E5D115A29DB662A8BC5D407757C7717B
 			print("\tINFO: Converting magnet URL to TCP with real-debrid API...")
 			# remote_file_size = 1024  # TODO
-			# In this section we need to uptdate the url variable to the TCP link from real-debrid.
-			url = rd.get_unrestricted_video_link(url)[0]
-			self.queue[position]["url"] = url  # Here we are swapping the intial URL
+			try:
+				infohash = url.split("btih:")[1].split("&")[0]
+			except IndexError:
+				print(f"\tERROR: Invalid magnet link: {url}")
+				return False
+
+			unrestricted_links = rd.get_unrestricted_video_link(infohash)
+			if not unrestricted_links:
+				print("\tERROR: Could not get unrestricted link from Real-Debrid.")
+				return False
+
+			url = unrestricted_links[0]
+			self.queue[position]["url"] = url
+
+			real_filename = rd.get_filename(infohash)
+			if real_filename == "No video files found.":
+				print(f"\tERROR: No video files found for infohash: {infohash}")
+				return False
+
+			_, extension = os.path.splitext(real_filename)
+			filename_without_crdownload = filename.rsplit(".crdownload", 1)[0]
+			new_filename = filename_without_crdownload + extension
+			self.queue[position]["filename"] = new_filename + ".crdownload"
+			filename = self.queue[position]["filename"]
 
 
 		request = requests.head(url, timeout=120, allow_redirects=True)
