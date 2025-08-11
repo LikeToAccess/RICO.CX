@@ -21,7 +21,7 @@ import requests
 from cachetools import TTLCache, LFUCache
 from oauthlib.oauth2 import WebApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InsecureTransportError
-from flask import Flask, redirect, render_template, render_template_string, request, url_for
+from flask import Flask, redirect, render_template, render_template_string, request, url_for, send_from_directory
 from flask_login import (  # type: ignore[import-untyped]
     LoginManager,
     current_user,
@@ -49,7 +49,7 @@ from settings import (
 )
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static/client')
 app.secret_key = os.urandom(24)
 
 login_manager = LoginManager()
@@ -129,17 +129,9 @@ def check_route_access():
     return redirect(url_for("login"))  # Send to login page (not logged in)
 
 @app.route("/")
-@app.route("/<video_url>")
 @public_route
-def index(video_url=None):
-    group = GroupMembership.get(current_user.id) if current_user.is_authenticated else None
-
-    return render_template(
-        "pages/home.html",
-        user=current_user,
-        group=group,
-        video_url=video_url
-    )
+def index():
+    return send_from_directory(app.static_folder + "/client", "index.html")
 
 @app.route('/static/js/settings.js')
 def serve_settings_js():
@@ -629,4 +621,4 @@ def get_google_provider_cfg():
 
 
 if __name__ == "__main__":
-    app.run(ssl_context="adhoc", debug=True, host="0.0.0.0", port=9000)
+    app.run(debug=True, host="0.0.0.0", port=9000)

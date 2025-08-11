@@ -15,7 +15,6 @@ def main():
             host=HOST,
             port=PORT,
             debug=DEBUG_MODE,
-            ssl_context="adhoc",
             use_reloader=USE_RELOADER
         )
     else:
@@ -24,7 +23,7 @@ def main():
             host=HOST,
             port=PORT,
             threads=12,
-            url_scheme="https"
+            url_scheme="http"
         )
     # app.app.run(host=HOST, port=PORT, ssl_context="adhoc")
 

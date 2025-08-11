@@ -69,7 +69,7 @@ DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
 # Conditional host and port settings
 if DEBUG_MODE:
-    HOST = "127.0.0.1"  # Local development
+    HOST = "0.0.0.0"    # Local development
     PORT = 9000
 else:
     HOST = "0.0.0.0"    # Production (accepts connections from any IP)
