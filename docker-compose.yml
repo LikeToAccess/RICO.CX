@@ -1,6 +1,7 @@
 services:
   webapp:
     build: .
+    entrypoint: ["python", "waitress_serve.py"]
     ports:
       - "9000:9000"
     env_file:

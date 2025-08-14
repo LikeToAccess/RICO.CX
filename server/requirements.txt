@@ -20,3 +20,4 @@ lxml
 dotenv
 feedparser
 bencodepy
+pyopenssl

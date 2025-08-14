@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y curl gnupg && \
 COPY server/ ./ 
 COPY --from=client /app/client/dist ./static/client
 
+ENV FLASK_APP=app.py
 ENV FLASK_DEBUG=0
 
-CMD ["python", "waitress_serve.py"]
+

@@ -32,7 +32,7 @@ PORT = 9000
 # Enables API serving via Flask instead of Waitress. Also disables downloading
 # full media and skips verification checks.
 # The default value is False.
-DEBUG_MODE = bool(os.getenv("DEBUG_MODE"))
+DEBUG_MODE = os.getenv("DEBUG_MODE", "False").lower() in ("true", "1", "t")
 USE_RELOADER = False
 
 # External API key for The Movie Database's offical API. The tmdbv3api Python

@@ -18,13 +18,9 @@ def main():
             use_reloader=USE_RELOADER
         )
     else:
-        serve(
-            app.app,
-            host=HOST,
-            port=PORT,
-            threads=12,
-            url_scheme="http"
-        )
+            app.app.run(host="0.0.0.0", port=9000, ssl_context='adhoc')
+
+# serve(app, host="0.0.0.0", port=9000)
     # app.app.run(host=HOST, port=PORT, ssl_context="adhoc")
 
 
