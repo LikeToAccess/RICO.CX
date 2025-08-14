@@ -507,6 +507,21 @@ def download_api(
         "video_url": video_url,
         "id": result_id}, 201
 
+@app.route("/api/v2/user")
+@login_required
+def get_user():
+    return {
+        "message": "OK",
+        "data": {
+            "id": current_user.id,
+            "first_name": current_user.first_name,
+            "last_name": current_user.last_name,
+            "email": current_user.email,
+            "profile_pic": current_user.profile_pic,
+            "banned": current_user.banned,
+        }
+    }, 200
+
 @app.route("/login")
 @public_route
 def login():
@@ -518,9 +533,10 @@ def login():
     # scopes that let you retrieve user's profile from Google
     request_uri = client.prepare_request_uri(
         authorization_endpoint,
-        redirect_uri=request.base_url.replace("http://", "https://", 1) + "/callback",
+        redirect_uri=request.base_url + "/callback",
         scope=["openid", "email", "profile"],
     )
+    print(f"Redirect URI: {request.base_url + '/callback'}")
     return redirect(request_uri)
 
 
