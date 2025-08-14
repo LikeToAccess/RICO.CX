@@ -5,14 +5,15 @@ import { motion } from 'framer-motion';
 import { apiService } from '../services/api';
 import { notifications } from '@mantine/notifications';
 import type { SearchResult } from '../services/api';
+import { AxiosError } from 'axios';
 
 interface VideoCardProps {
   result: SearchResult;
 }
 
 export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
-  const [isDownloading, setIsDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState<'idle' | 'downloading' | 'success' | 'error'>('idle');
+  const isDownloadingRef = useRef(false);
   const [titleHeight, setTitleHeight] = useState(0);
   const titleRef = useRef<HTMLDivElement>(null);
 
@@ -31,7 +32,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   const isWrapped = titleHeight > 35; 
   const filenameTopPosition = isWrapped ? '500px' : '485px';
 
-  const poster = result.poster_url || 'http://localhost:5000/static/img/missing_poster.svg';
+  const poster = result.poster_url || '/placeholder-poster.svg';
   const quality = result.quality_tag || '';
   const description = result.description || '';
   const year = result.release_year || '';
@@ -51,12 +52,13 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   // }
 
   const handleDownload = async () => {
+    if (isDownloadingRef.current) return;
+    isDownloadingRef.current = true;
+
+    setDownloadStatus('downloading');
+
     try {
-      setIsDownloading(true);
-      setDownloadStatus('downloading');
-      
       await apiService.downloadVideo(result.page_url, result.id || 0);
-      
       setDownloadStatus('success');
       notifications.show({
         title: 'Download Started',
@@ -66,15 +68,28 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
       });
     } catch (error: unknown) {
       setDownloadStatus('error');
-      const errorMessage = error instanceof Error ? error.message : 'Failed to start download';
-      notifications.show({
-        title: 'Download Failed',
-        message: errorMessage,
-        color: 'red',
-        icon: <IconX size={16} />,
-      });
-    } finally {
-      setIsDownloading(false);
+      isDownloadingRef.current = false; // Allow retry on error
+
+      if (error instanceof AxiosError && error.response?.status === 403) {
+        notifications.show({
+          title: 'Login Required',
+          message: 'You must be logged in to download movies.',
+          color: 'yellow',
+          icon: <IconX size={16} />,
+          autoClose: 5000,
+          onClick: () => {
+            window.location.href = '/login';
+          },
+        });
+      } else {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to start download';
+        notifications.show({
+          title: 'Download Failed',
+          message: errorMessage,
+          color: 'red',
+          icon: <IconX size={16} />,
+        });
+      }
     }
   };
 
@@ -144,7 +159,6 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
           <Button 
             leftSection={<IconDownload size={16} />} 
             onClick={handleDownload} 
-            disabled={isDownloading}
             size="sm"
             style={{
               ...buttonStyle,

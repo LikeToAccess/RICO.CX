@@ -148,17 +148,7 @@ def serve_settings_js():
         debug_mode=DEBUG_MODE
     )
 
-@app.route("/search")
-@app.route("/search/<query>")
-def search_results(query=None):
-    group = GroupMembership.get(current_user.id) if current_user.is_authenticated else None
 
-    return render_template(
-        "pages/search.html",
-        user=current_user,
-        group=group,
-        query=query,
-    )
 
 # Handle delete, ban, and change_role POST requests to /admin
 @app.route("/admin", methods=["POST"])
@@ -351,6 +341,7 @@ def search_api(query=None):
     return {"message": "OK", "data": [result.sanatize() for result in results]}, 200
 
 @app.route("/api/v2/download", methods=["POST"])
+@login_required
 @timer
 def download_api(
     page_url: str | None = None,

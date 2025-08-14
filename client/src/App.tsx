@@ -36,7 +36,7 @@ const theme = createTheme({
 function App() {
   return (
     <MantineProvider theme={theme} defaultColorScheme="auto">
-      <Notifications position="top-right" />
+      <Notifications position="top-center" />
       <BrowserRouter>
         <AuthProvider>
           <AppRouter />

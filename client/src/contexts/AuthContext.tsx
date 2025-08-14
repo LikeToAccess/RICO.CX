@@ -46,9 +46,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(data.data);
         // You might want to fetch group data as well
         // setGroup(data.group);
-      } else if (response.status === 403) {
-        // User is not logged in, do nothing
-      } else {
+      } else if (response.status !== 403) { // Any status other than 403 is an error
         throw new Error('Failed to fetch user');
       }
     } catch (error) {
