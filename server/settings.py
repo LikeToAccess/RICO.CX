@@ -73,4 +73,4 @@ if DEBUG_MODE:
     PORT = 9000
 else:
     HOST = "0.0.0.0"    # Production (accepts connections from any IP)
-    PORT = 443          # Standard HTTPS port
+    PORT = 9000         # Standard HTTPS port

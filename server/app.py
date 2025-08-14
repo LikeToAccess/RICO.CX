@@ -131,7 +131,15 @@ def check_route_access():
 @app.route("/")
 @public_route
 def index():
-    return send_from_directory(app.static_folder + "/client", "index.html")
+    return send_from_directory(app.static_folder, "index.html")
+
+@app.route('/assets/<path:path>')
+def serve_assets(path):
+    return send_from_directory(os.path.join(app.static_folder, 'assets'), path)
+
+@app.route('/favicon.png')
+def serve_favicon():
+    return send_from_directory(app.static_folder, 'favicon.png')
 
 @app.route('/static/js/settings.js')
 def serve_settings_js():
