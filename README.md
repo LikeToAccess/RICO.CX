@@ -1,10 +1,3 @@
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 # RICO.CX
 
 RICO.GA but the letter A is replaced with a Q but the letter G is replaced with a C but the letter Q is replaced with an X
