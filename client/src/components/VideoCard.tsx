@@ -32,7 +32,7 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
   const isWrapped = titleHeight > 35; 
   const filenameTopPosition = isWrapped ? '500px' : '485px';
 
-  const poster = result.poster_url || '/placeholder-poster.svg';
+  const poster = result.poster_url || '/img/missing_poster.svg';
   const quality = result.quality_tag || '';
   const description = result.description || '';
   const year = result.release_year || '';
@@ -216,8 +216,8 @@ export const VideoCard: React.FC<VideoCardProps> = ({ result }) => {
           onError={(e) => {
             const target = e.currentTarget;
             // First fallback: try the server's missing poster
-            if (target.src !== "http://localhost:5000/static/img/missing_poster.svg") {
-              target.src = "http://localhost:5000/static/img/missing_poster.svg";
+            if (target.src !== "/img/missing_poster.svg") {
+              target.src = "/img/missing_poster.svg";
               // Update styles for missing poster
               target.style.width = '200px';
               target.style.height = '200px';

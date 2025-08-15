@@ -137,6 +137,10 @@ def index():
 def serve_assets(path):
     return send_from_directory(os.path.join(app.static_folder, 'assets'), path)
 
+@app.route('/img/<path:path>')
+def serve_img(path):
+    return send_from_directory(os.path.join(app.static_folder, 'img'), path)
+
 @app.route('/favicon.png')
 def serve_favicon():
     return send_from_directory(app.static_folder, 'favicon.png')
