@@ -7,22 +7,37 @@ import type { SearchResult } from '../services/api';
 
 export const PopularContent: React.FC = () => {
   const [popularContent, setPopularContent] = useState<SearchResult[]>([]);
-  const [loading, setLoading] = useState(false); // Changed to false - don't load immediately
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [streamingComplete, setStreamingComplete] = useState(false);
 
   const fetchPopular = async () => {
     if (hasLoaded) return; // Don't fetch if already loaded
     
     try {
       setLoading(true);
-      const data = await apiService.getPopular();
-      setPopularContent(data);
-      setHasLoaded(true);
+      setError(null);
+      setPopularContent([]); // Clear existing content
+      setStreamingComplete(false);
+      
+      // Use streaming API that updates UI progressively
+      await apiService.getPopular((batchResults, isComplete) => {
+        if (batchResults.length > 0) {
+          // Add new results to existing ones
+          setPopularContent(prev => [...prev, ...batchResults]);
+        }
+        
+        if (isComplete) {
+          setStreamingComplete(true);
+          setLoading(false);
+          setHasLoaded(true);
+        }
+      });
+      
     } catch (err) {
       setError('Failed to load popular content');
       console.error('Popular content fetch error:', err);
-    } finally {
       setLoading(false);
     }
   };
@@ -60,7 +75,7 @@ export const PopularContent: React.FC = () => {
           Popular Content
         </Title>
         <Center>
-          <Button onClick={fetchPopular} size="lg">
+          <Button onClick={fetchPopular} size="lg" loading={loading}>
             Load Popular Content
           </Button>
         </Center>
@@ -75,22 +90,28 @@ export const PopularContent: React.FC = () => {
       transition={{ duration: 0.6 }}
     >
       <Title order={2} mb="lg" ta="center">
-        Popular Content
+        Popular Content {loading && !streamingComplete && `(Loading... ${popularContent.length} results)`}
       </Title>
       
       <Grid>
         {popularContent.map((item, index) => (
-          <Grid.Col key={item.id} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
+          <Grid.Col key={`${item.id || item.filename}-${index}`} span={{ base: 12, sm: 6, md: 4, lg: 3 }}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1, duration: 0.5 }}
+              transition={{ delay: index * 0.05, duration: 0.3 }} // Faster animations for streaming
             >
               <VideoCard result={item} />
             </motion.div>
           </Grid.Col>
         ))}
       </Grid>
+      
+      {loading && !streamingComplete && (
+        <Center mt="lg">
+          <Loader size="sm" />
+        </Center>
+      )}
     </motion.div>
   );
 };

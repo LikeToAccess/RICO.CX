@@ -1,0 +1,6 @@
+@echo off
+echo Stopping and removing containers...
+docker-compose down
+echo Building images...
+docker-compose build
+echo Done.

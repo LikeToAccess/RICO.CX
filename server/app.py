@@ -19,6 +19,7 @@ import os
 
 import requests
 from cachetools import TTLCache, LFUCache
+from flask import Flask, request, jsonify, send_from_directory, Response
 from oauthlib.oauth2 import WebApplicationClient
 from oauthlib.oauth2.rfc6749.errors import InsecureTransportError
 from flask import Flask, redirect, render_template, render_template_string, request, url_for, send_from_directory
@@ -300,16 +301,72 @@ async def popular_api():
     """
     cache_hit = search_cache.get("_popular")
     if cache_hit is None:
-        popular = scraper.popular()
-        search_cache["_popular"] = popular
+        print("🌊 NO CACHE HIT - Using streaming mode for popular")
+        # Always use streaming for uncached requests
+        def generate():
+            try:
+                all_results = []
+                for batch_results, progress_info in scraper.popular_streaming():
+                    all_results.extend(batch_results)
+                    # Send batch as SSE
+                    data = {
+                        "results": [result.sanatize() for result in batch_results],
+                        "progress": progress_info
+                    }
+                    yield f"data: {json.dumps(data)}\n\n"
+                
+                # Cache the complete results
+                search_cache["_popular"] = all_results
+                
+                # Send completion signal
+                yield f"data: {json.dumps({'complete': True})}\n\n"
+                
+            except Exception as e:
+                error_data = {"error": str(e), "complete": True}
+                yield f"data: {json.dumps(error_data)}\n\n"
+        
+        return Response(generate(), mimetype='text/event-stream', headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Cache-Control'
+        })
     else:
         popular = cache_hit
         print("Cache Hit: _popular")
+        return {"message": "OK", "data": [result.sanatize() for result in popular]}, 200
 
-    results = popular
-
-    print(results)
-    return {"message": "OK", "data": [result.sanatize() for result in results]}, 200
+@app.route("/api/v2/popular/stream", methods=["GET"])
+def popular_stream_api():
+    """
+    Stream popular movies as batches complete.
+    Returns Server-Sent Events (SSE) for real-time streaming.
+    """
+    def generate():
+        try:
+            for batch_results, progress_info in scraper.popular_streaming():
+                # Create the SSE data
+                data = {
+                    "results": [result.sanatize() for result in batch_results],
+                    "progress": progress_info
+                }
+                
+                # Send as SSE format
+                yield f"data: {json.dumps(data)}\n\n"
+                
+            # Send completion signal
+            yield f"data: {json.dumps({'complete': True})}\n\n"
+            
+        except Exception as e:
+            error_data = {"error": str(e), "complete": True}
+            yield f"data: {json.dumps(error_data)}\n\n"
+    
+    return Response(generate(), mimetype='text/plain', headers={
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+    })
 
 @app.route("/api/v2/search", methods=["GET"])
 def search_api(query=None):
@@ -331,18 +388,100 @@ def search_api(query=None):
         return {"message": "No query provided\nPlease report error code: BANJO"}, 400
 
     if not (results := search_cache.get(query)):
-        try:
-            results = scraper.search(query)
-        except requests.exceptions.ConnectionError as e:
-            print(f"Connection error during search: {e}")
-            return {"message": "Failed to connect to search service\nPlease report error code: FALCON"}, 502
-        if not results:
-            return {"message": "No results found"}, 404
-        search_cache[query] = results
+        print(f"🌊 NO CACHE HIT for query '{query}' - Using streaming mode")
+        # Always use streaming for uncached requests
+        def generate():
+            try:
+                all_results = []
+                has_results = False
+                for batch_results, progress_info in scraper.search_streaming(query):
+                    has_results = True
+                    all_results.extend(batch_results)
+                    # Send batch as SSE
+                    data = {
+                        "results": [result.sanatize() for result in batch_results],
+                        "progress": progress_info
+                    }
+                    yield f"data: {json.dumps(data)}\n\n"
+                
+                if not has_results:
+                    yield f"data: {json.dumps({'error': 'No results found', 'complete': True})}\n\n"
+                    return
+                
+                # Cache the complete results
+                search_cache[query] = all_results
+                
+                # Send completion signal
+                yield f"data: {json.dumps({'complete': True})}\n\n"
+                
+            except requests.exceptions.ConnectionError as e:
+                print(f"Connection error during search: {e}")
+                error_data = {"error": "Failed to connect to search service", "complete": True}
+                yield f"data: {json.dumps(error_data)}\n\n"
+            except Exception as e:
+                error_data = {"error": str(e), "complete": True}
+                yield f"data: {json.dumps(error_data)}\n\n"
+        
+        return Response(generate(), mimetype='text/event-stream', headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': 'Cache-Control'
+        })
     else:
         print(f"Cache Hit: {query}")
+        return {"message": "OK", "data": [result.sanatize() for result in results]}, 200
 
-    return {"message": "OK", "data": [result.sanatize() for result in results]}, 200
+@app.route("/api/v2/clear-cache", methods=["POST"])
+def clear_cache_api():
+    """Clear the search cache for testing."""
+    search_cache.clear()
+    return {"message": "Cache cleared"}, 200
+
+@app.route("/api/v2/search/stream", methods=["GET"])
+def search_stream_api():
+    """
+    Stream search results as batches complete.
+    Returns Server-Sent Events (SSE) for real-time streaming.
+    """
+    query = request.args.get("q", str()).lower().strip()
+    if not query:
+        return {"message": "No query provided\nPlease report error code: BANJO"}, 400
+
+    def generate():
+        try:
+            has_results = False
+            for batch_results, progress_info in scraper.search_streaming(query):
+                has_results = True
+                # Create the SSE data
+                data = {
+                    "results": [result.sanatize() for result in batch_results],
+                    "progress": progress_info
+                }
+                
+                # Send as SSE format
+                yield f"data: {json.dumps(data)}\n\n"
+                
+            if not has_results:
+                yield f"data: {json.dumps({'error': 'No results found', 'complete': True})}\n\n"
+            else:
+                # Send completion signal
+                yield f"data: {json.dumps({'complete': True})}\n\n"
+                
+        except requests.exceptions.ConnectionError as e:
+            print(f"Connection error during search: {e}")
+            error_data = {"error": "Failed to connect to search service", "complete": True}
+            yield f"data: {json.dumps(error_data)}\n\n"
+        except Exception as e:
+            error_data = {"error": str(e), "complete": True}
+            yield f"data: {json.dumps(error_data)}\n\n"
+    
+    return Response(generate(), mimetype='text/plain', headers={
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Cache-Control'
+    })
 
 @app.route("/api/v2/download", methods=["POST"])
 @login_required

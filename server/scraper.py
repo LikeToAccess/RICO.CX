@@ -12,6 +12,7 @@
 #==============================================================================
 import re
 import json
+import concurrent.futures
 from time import sleep
 import urllib.parse
 
@@ -678,6 +679,93 @@ class Milkie:
 
 		return results
 
+	def search_streaming(self, query: str, timeout: int = 10):
+		"""
+		Stream search results as batches complete.
+		Yields (batch_results, progress_info) tuples.
+		"""
+		url = self.search_url + urllib.parse.quote(query)
+		request = requests.get(url, timeout=timeout)
+		print(f"DEBUG: {url} (url)")
+		
+		# Use the streaming version of _get_results_from_request
+		yield from self._get_results_from_request_streaming(request)
+
+	def _get_results_from_request_streaming(self, request: requests.Response):
+		"""
+		Generator that yields results as FileBot batches complete.
+		Processes the RSS feed and streams results back.
+		"""
+		rss_results = feedparser.parse(request.text).entries
+		results = [result.title for result in rss_results]
+		print(results)
+		results = Result.remove.codecs(results)
+		results = Result.remove.bad_characters(results)
+		
+		# Create the file dictionaries for FileBot processing
+		file_dicts = [{
+			"filename": result,
+			"filename_old": result,
+			"page_url": rss_result.link
+		} for result, rss_result in zip(results, rss_results)]
+		
+		# Stream results from FileBot processing
+		for batch_results, progress_info in fb.get_names_streaming(file_dicts):
+			# Filter results that have tmdb_id before making API calls
+			results_with_tmdb = [(i, result) for i, result in enumerate(batch_results) 
+			                     if result.get("tmdb_id") and result.get("tmdb_id") != ""]
+			
+			if results_with_tmdb:
+				# Parallelize TMDb API calls for this batch
+				def fetch_tmdb_details(index_result_pair):
+					index, result = index_result_pair
+					try:
+						result_data = tmdb.details_movie(result["tmdb_id"])
+						if result_data.get("poster_path") is not None:
+							result["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+						if result_data.get("runtime") is not None:
+							result["duration"] = result_data["runtime"]
+						if result_data.get("vote_average") is not None:
+							result["score"] = f"{result_data['vote_average']/10:.0%}"
+						return index, result
+					except (ValueError, TypeError) as e:
+						print(f"WARNING: Could not get TMDb details for '{result.get('title', 'Unknown')}' with ID '{result.get('tmdb_id')}': {e}")
+						return index, result
+
+				# Use ThreadPoolExecutor for this batch's TMDb calls
+				with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+					futures = {executor.submit(fetch_tmdb_details, (i, result)): i for i, result in results_with_tmdb}
+					for future in concurrent.futures.as_completed(futures):
+						try:
+							index, updated_result = future.result()
+							batch_results[index] = updated_result
+						except Exception as exc:
+							print(f"TMDb API call failed: {exc}")
+			
+			# Convert to Result objects and yield
+			result_objects = [Result(scraper_object=self, **result) for result in batch_results]
+			yield result_objects, progress_info
+
+	def search_streaming(self, query: str, timeout: int = 10):
+		"""
+		Generator that yields search results as they become available.
+		"""
+		url = self.search_url + urllib.parse.quote(query)
+		request = requests.get(url, timeout=timeout)
+		print(f"DEBUG: {url} (url)")
+		
+		yield from self._get_results_from_request_streaming(request)
+
+	def popular_streaming(self, timeout: int = 10):
+		"""
+		Generator that yields popular results as they become available.
+		"""
+		url = self.popular_url
+		request = requests.get(url, timeout=timeout)
+		print(f"DEBUG: {url} (url)")
+		
+		yield from self._get_results_from_request_streaming(request)
+
 	def _get_results_from_request(self, request: requests.Response) -> list[Result]:
 		"""
 		Convenience function to convert the request into a list of Result objects
@@ -699,21 +787,39 @@ class Milkie:
 				"page_url":rss_result.link
 			} for result, rss_result in zip(results, rss_results)])
 
-		for index, result in enumerate(results):
-			if result.get("tmdb_id") is None or result.get("tmdb_id") == "":
-				continue
+		# Filter results that have tmdb_id before making API calls
+		results_with_tmdb = [(i, result) for i, result in enumerate(results) 
+		                     if result.get("tmdb_id") and result.get("tmdb_id") != ""]
+		
+		if not results_with_tmdb:
+			# No results have tmdb_id, skip TMDb API calls entirely
+			return [Result(scraper_object=self, **result) for result in results]
+
+		# Parallelize TMDb API calls for massive speed improvement
+		def fetch_tmdb_details(index_result_pair):
+			index, result = index_result_pair
 			try:
 				result_data = tmdb.details_movie(result["tmdb_id"])
-				# print(result_data)
 				if result_data.get("poster_path") is not None:
-					results[index]["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+					result["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
 				if result_data.get("runtime") is not None:
-					results[index]["duration"] = result_data["runtime"]
+					result["duration"] = result_data["runtime"]
 				if result_data.get("vote_average") is not None:
-					results[index]["score"] = f"{result_data['vote_average']/10:.0%}"
+					result["score"] = f"{result_data['vote_average']/10:.0%}"
+				return index, result
 			except (ValueError, TypeError) as e:
 				print(f"WARNING: Could not get TMDb details for '{result.get('title', 'Unknown')}' with ID '{result.get('tmdb_id')}': {e}")
-				continue
+				return index, result
+
+		# Use ThreadPoolExecutor to parallelize TMDb API calls - only for results with tmdb_id
+		with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+			futures = {executor.submit(fetch_tmdb_details, (i, result)): i for i, result in results_with_tmdb}
+			for future in concurrent.futures.as_completed(futures):
+				try:
+					index, updated_result = future.result()
+					results[index] = updated_result
+				except Exception as exc:
+					print(f"TMDb API call failed: {exc}")
 
 		return [Result(scraper_object=self, **result) for result in results]
 

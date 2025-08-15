@@ -22,14 +22,21 @@ export const SearchPage: React.FC = () => {
         setError(null);
         setResults([]); // Clear previous results immediately
         
-        let data: SearchResult[];
         if (query === 'popular') {
-          data = await apiService.getPopular();
+          await apiService.getPopular((batch, isComplete) => {
+            setResults(prev => [...prev, ...batch]);
+            if (isComplete) {
+              setLoading(false);
+            }
+          });
         } else {
-          data = await apiService.search(decodeURIComponent(query));
+          await apiService.search(decodeURIComponent(query), (batch, isComplete) => {
+            setResults(prev => [...prev, ...batch]);
+            if (isComplete) {
+              setLoading(false);
+            }
+          });
         }
-        
-        setResults(data);
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : 'Search failed';
         setError(errorMsg);
@@ -37,10 +44,10 @@ export const SearchPage: React.FC = () => {
         console.error('Error details:', {
           err,
           query,
-          decodedQuery: decodeURIComponent(query)
+          decodedQuery: query ? decodeURIComponent(query) : ''
         });
       } finally {
-        setLoading(false);
+        // setLoading(false) is now handled inside the search logic
       }
     };
 

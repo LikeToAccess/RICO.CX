@@ -74,16 +74,187 @@ export interface ApiResponse<T> {
 }
 
 export const apiService = {
-  // Search API
-  search: async (query: string): Promise<SearchResult[]> => {
-    const response = await api.get<ApiResponse<SearchResult[]>>(`/api/v2/search?q=${encodeURIComponent(query)}`);
-    return response.data.data;
+  // Search API with streaming support
+  search: async (query: string, onBatch: (results: SearchResult[], isComplete: boolean) => void): Promise<void> => {
+    try {
+      const response = await fetch(`/api/v2/search?q=${encodeURIComponent(query)}`, {
+        credentials: 'include'
+      });
+
+      // Check if it's a streaming response
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        console.log(`🌊 Received streaming response for query: ${query}`);
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          let buffer = '';
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.results) {
+                    console.log(`📦 Received batch with ${data.results.length} results`);
+                    onBatch(data.results, false);
+                  }
+                  if (data.complete) {
+                    console.log('✅ Streaming complete');
+                    onBatch([], true);
+                    return;
+                  }
+                  if (data.error) {
+                    throw new Error(data.error);
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse SSE data:', line, e);
+                }
+              }
+            }
+          }
+        }
+      } else {
+        console.log(`📄 Received regular JSON response for query: ${query}`);
+        // Handle regular JSON response
+        const data = await response.json();
+        onBatch(data.data, true);
+      }
+    } catch (error) {
+      console.warn('Request failed, falling back to regular API:', error);
+      // Fallback to regular API call
+      const response = await api.get<ApiResponse<SearchResult[]>>(`/api/v2/search?q=${encodeURIComponent(query)}`);
+      onBatch(response.data.data, true);
+    }
   },
 
-  // Get popular content
-  getPopular: async (): Promise<SearchResult[]> => {
-    const response = await api.get<ApiResponse<SearchResult[]>>('/api/v2/popular');
-    return response.data.data;
+  // Get popular content with progressive streaming (calls callback for each batch)
+  getPopular: async (onBatch: (results: SearchResult[], isComplete: boolean) => void): Promise<void> => {
+    try {
+      const response = await fetch('/api/v2/popular', {
+        credentials: 'include'
+      });
+
+      // Check if it's a streaming response
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        console.log('🌊 Received streaming response');
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          let buffer = '';
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.results) {
+                    console.log(`📦 Received batch with ${data.results.length} results`);
+                    onBatch(data.results, false);
+                  }
+                  if (data.complete) {
+                    console.log('✅ Streaming complete');
+                    onBatch([], true);
+                    return;
+                  }
+                  if (data.error) {
+                    throw new Error(data.error);
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse SSE data:', line, e);
+                }
+              }
+            }
+          }
+        }
+      } else {
+        console.log('📄 Received regular JSON response');
+        // Handle regular JSON response
+        const data = await response.json();
+        onBatch(data.data, true);
+      }
+    } catch (error) {
+      console.warn('Request failed, falling back to regular API:', error);
+      // Fallback to regular API call
+      const response = await api.get<ApiResponse<SearchResult[]>>('/api/v2/popular');
+      onBatch(response.data.data, true);
+    }
+  },
+
+  // Get popular content with progressive streaming (calls callback for each batch)
+  getPopularStreaming: async (onBatch: (results: SearchResult[], isComplete: boolean) => void): Promise<void> => {
+    try {
+      const response = await fetch('/api/v2/popular', {
+        credentials: 'include'
+      });
+
+      // Check if it's a streaming response
+      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+        console.log('🌊 Received streaming response');
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (reader) {
+          let buffer = '';
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  if (data.results) {
+                    console.log(`📦 Received batch with ${data.results.length} results`);
+                    onBatch(data.results, false);
+                  }
+                  if (data.complete) {
+                    console.log('✅ Streaming complete');
+                    onBatch([], true);
+                    return;
+                  }
+                  if (data.error) {
+                    throw new Error(data.error);
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse SSE data:', line, e);
+                }
+              }
+            }
+          }
+        }
+      } else {
+        console.log('📄 Received regular JSON response');
+        // Handle regular JSON response
+        const data = await response.json();
+        onBatch(data.data, true);
+      }
+    } catch (error) {
+      console.warn('Request failed, falling back to regular API:', error);
+      // Fallback to regular API call
+      const response = await api.get<ApiResponse<SearchResult[]>>('/api/v2/popular');
+      onBatch(response.data.data, true);
+    }
   },
 
   // Get video details

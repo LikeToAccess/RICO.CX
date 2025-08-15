@@ -82,10 +82,20 @@ def get_quality_tag(file_dict: dict) -> str:
 def generate_clean_query(filename):
     """Cleans a messy filename into a simple search query."""
     query = re.sub(r'[._-]', ' ', filename)
+    
+    # Remove common release group patterns and quality indicators
+    query = re.sub(r'\b(1080p|720p|480p|2160p|UHD|BluRay|WEB|H264|x264|HDTV|DVDRip|BDRip|WEBRip)\b', '', query, flags=re.IGNORECASE)
+    query = re.sub(r'\b(CBFM|ETHEL|AccomplishedYak|DARKFLiX|CODSWALLOP|WEEB|VETO|KNiVES|D3US|EDITH|SKYFiRE|BLOOM)\b', '', query, flags=re.IGNORECASE)
+    
+    # Extract year and truncate after it for better matching
     year_match = re.search(r'\b(19|20)\d{2}\b', query)
     if year_match:
         query = query[:year_match.end()]
-    return query.strip()
+    
+    # Clean up extra spaces
+    query = re.sub(r'\s+', ' ', query).strip()
+    
+    return query
 
 
 class ScraperTools(WaitUntilElement, FindElement):
@@ -107,12 +117,125 @@ class FileBot:
         self.command_template = ["filebot", "-list", "--db", "TheMovieDB", "--format", "{json}", "-non-strict"]
         self.CPU_CORES = os.cpu_count() or 1
         self.MAX_WORKERS = min(self.CPU_CORES * 4, 32)
-        self.BATCH_SIZE = max(4, self.CPU_CORES // 2)
+        self.BATCH_SIZE = max(4, self.CPU_CORES // 2)  # Restore original batch size
 
-    def _process_batch_worker(self, batch: list[dict]) -> list[dict]:
-        """Worker function processes a batch of file dictionaries."""
-        # The worker now calls get_name for each dictionary in its assigned batch.
-        return [self.get_name(file_dict) for file_dict in batch]
+    def _process_batch(self, batch: list[dict]) -> list[dict]:
+        """
+        Processes a batch of file dictionaries with a single FileBot call.
+        This version tries to be more resilient to partial failures.
+        """
+        if len(batch) == 1:
+            # For single items, just use individual processing directly
+            return [self.get_name(batch[0])]
+            
+        queries = [f'--q "{generate_clean_query(f.get("filename", ""))}"' for f in batch]
+        command_str = " ".join(self.command_template + queries + ["--log", "off"])
+        
+        processed_batch = []
+        try:
+            # We remove check=True to handle cases where filebot returns a non-zero exit code
+            # but still provides partial results.
+            result = subprocess.run(
+                command_str, capture_output=True, text=True,
+                encoding='utf-8', errors='ignore', shell=True, timeout=20  # Reduced timeout
+            )
+
+            # Create a map from query to result for reliable matching
+            result_map = {}
+            if result.stdout and result.stdout.strip():
+                for line in result.stdout.strip().split('\n'):
+                    if not line.strip():
+                        continue
+                    try:
+                        res = json.loads(line)
+                        query_key = (res.get("q", "") or "").lower().strip()
+                        if query_key:
+                            result_map[query_key] = res
+                    except json.JSONDecodeError:
+                        continue # Ignore malformed lines
+
+            # Process the original batch, using the result map
+            for file_dict in batch:
+                original_filename = file_dict.get("filename", "")
+                clean_query = generate_clean_query(original_filename).lower().strip()
+                movie_data = result_map.get(clean_query)
+
+                if movie_data:
+                    movie_name = movie_data.get('name')
+                    movie_year = movie_data.get('year')
+                    tmdb_id = movie_data.get('tmdbId') or movie_data.get('id')
+                    if movie_name and movie_year and tmdb_id:
+                        renamed = f"{movie_name} ({movie_year}) {{tmdb-{tmdb_id}}}"
+                        file_dict.update({
+                            "filename": sanitize_filename(renamed),
+                            "title": movie_name,
+                            "release_year": str(movie_year),
+                            "tmdb_id": str(tmdb_id),
+                        })
+                        processed_batch.append(file_dict)
+                    else:
+                        # Result was incomplete, fallback to individual processing
+                        processed_batch.append(self.get_name(file_dict))
+                else:
+                    # No result for this query, fallback to individual processing
+                    processed_batch.append(self.get_name(file_dict))
+            
+            return processed_batch
+
+        except subprocess.TimeoutExpired:
+            print(f"⚠️ Batch timed out after 20s. Falling back to individual processing.")
+            return [self.get_name(file_dict) for file_dict in batch]
+        except Exception as e:
+            # If the whole batch process fails catastrophically, fall back for all items.
+            print(f"⚠️ Batch failed unexpectedly: {e}. Falling back to individual processing.")
+            return [self.get_name(file_dict) for file_dict in batch]
+
+    def get_names_streaming(self, filenames: list[dict]):
+        """
+        Generator that yields results as batches complete for streaming to client.
+        Yields (batch_results, progress_info) tuples.
+        """
+        print(f"🚀 Processing {len(filenames)} files with streaming batched workers...")
+        print(f"⚡ Using up to {self.MAX_WORKERS} workers.")
+        print(f"📦 Batch size per worker: {self.BATCH_SIZE}")
+
+        start_time = time.time()
+        file_batches = [filenames[i:i + self.BATCH_SIZE] for i in range(0, len(filenames), self.BATCH_SIZE)]
+        print(f"🔥 Created {len(file_batches)} batches to distribute among workers.")
+
+        completed_batches = 0
+        total_results = 0
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
+            future_to_batch = {executor.submit(self._process_batch, batch): batch for batch in file_batches}
+            
+            for future in concurrent.futures.as_completed(future_to_batch):
+                try:
+                    batch_results = future.result()
+                    completed_batches += 1
+                    total_results += len(batch_results)
+                    
+                    elapsed_time = time.time() - start_time
+                    progress_info = {
+                        "completed_batches": completed_batches,
+                        "total_batches": len(file_batches),
+                        "processed_files": total_results,
+                        "total_files": len(filenames),
+                        "elapsed_time": elapsed_time,
+                        "files_per_second": total_results / elapsed_time if elapsed_time > 0 else 0
+                    }
+                    
+                    print(f"📦 Batch {completed_batches}/{len(file_batches)} completed - streaming {len(batch_results)} results")
+                    
+                    # Yield the batch results and progress info
+                    yield batch_results, progress_info
+                    
+                except Exception as exc:
+                    print(f"❌ A batch generated a catastrophic exception: {exc}")
+                    completed_batches += 1
+
+        final_time = time.time() - start_time
+        print(f"✅ Streaming completed in {final_time:.2f} seconds ({len(filenames) / final_time:.2f} files/s)")
 
     def get_names(self, filenames: list[dict]) -> list[dict]:
         """Processes a list of file dictionaries in parallel batches."""
@@ -126,7 +249,7 @@ class FileBot:
 
         all_results = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.MAX_WORKERS) as executor:
-            future_to_batch = {executor.submit(self._process_batch_worker, batch): batch for batch in file_batches}
+            future_to_batch = {executor.submit(self._process_batch, batch): batch for batch in file_batches}
             for i, future in enumerate(concurrent.futures.as_completed(future_to_batch), 1):
                 try:
                     all_results.extend(future.result())
@@ -141,7 +264,7 @@ class FileBot:
         total_time = end_time - start_time
         if total_time > 0:
             print(f"✅ Completed processing in {total_time:.2f} seconds ({len(filenames) / total_time:.2f} files/s)")
-        
+
         return all_results
 
     def get_name(self, file_dict: dict) -> dict:
@@ -149,40 +272,55 @@ class FileBot:
         Processes a single file dictionary, updating it with FileBot and TMDb info.
         It preserves existing keys like 'page_url'.
         """
-        # Get the filename to process from the incoming dictionary
         filename = file_dict.get("filename", "")
         file_dict["filename_old"] = file_dict.get("filename_old", filename)
-
-        # Update dictionary with quality tag
         get_quality_tag(file_dict)
+
+        # Quick check for content that's unlikely to be in TMDb (basic documentary detection)
+        documentary_keywords = ['documentary', 'behind.the.scenes', 'making.of', 'interview', 'concert', 'live.concert']
+        if any(keyword in filename.lower() for keyword in documentary_keywords):
+            clean_title = re.sub(r'\.(mkv|mp4|avi)$', '', filename.replace(".", " ")).strip()
+            file_dict.update({
+                "filename": clean_title,
+                "title": clean_title,
+                "release_year": "N/A",
+                "tmdb_id": "",
+            })
+            return file_dict
 
         try:
             clean_query = generate_clean_query(filename)
             command = self.command_template + ["--q", clean_query, "--log", "off"]
             result = subprocess.run(
-                command, capture_output=True, text=True, check=True, encoding='utf-8', errors='ignore'
+                command, capture_output=True, text=True, check=True,
+                encoding='utf-8', errors='ignore', timeout=8  # Reduced timeout
             )
-
-            if result.stdout.strip():
-                movie_data = json.loads(result.stdout.strip().split('\n')[0])
+            # Check if stdout has content before trying to parse
+            if result.stdout and result.stdout.strip():
+                # FileBot may return multiple JSON objects for -non-strict queries.
+                # We'll take the first one as the most likely match.
+                first_line = result.stdout.strip().split('\n')[0]
+                movie_data = json.loads(first_line)
                 movie_name = movie_data.get('name')
                 movie_year = movie_data.get('year')
                 tmdb_id = movie_data.get('tmdbId') or movie_data.get('id')
 
                 if movie_name and movie_year and tmdb_id:
                     renamed = f"{movie_name} ({movie_year}) {{tmdb-{tmdb_id}}}"
-                    # Update the dictionary with new info
                     file_dict.update({
                         "filename": sanitize_filename(renamed),
                         "title": movie_name,
                         "release_year": str(movie_year),
                         "tmdb_id": str(tmdb_id),
                     })
+                    # Successfully processed, return the updated dict
                     return file_dict
-        except (subprocess.CalledProcessError, json.JSONDecodeError, Exception):
-            pass  # Fall through to default if any error occurs
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, json.JSONDecodeError, Exception) as e:
+            # Log the error for debugging but proceed to the fallback
+            print(f"ℹ️  FileBot 'get_name' failed for '{filename}': {e}. Using fallback.")
 
-        # If FileBot fails, set default values but preserve original keys
+        # Fallback logic: This block is now guaranteed to run if the try block fails or doesn't return.
+        # This ensures 'title' is always set.
         clean_title = re.sub(r'\.(mkv|mp4|avi)$', '', filename.replace(".", " ")).strip()
         file_dict.update({
             "filename": clean_title,
