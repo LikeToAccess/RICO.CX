@@ -11,6 +11,7 @@
 # py version        : 3.12.0 (must run on 3.10 or higher)
 #==============================================================================
 import re
+import os
 import json
 from time import sleep
 import urllib.parse
@@ -631,9 +632,12 @@ rd = RealDebrid()
 
 class Milkie:
 	def __init__(self):
-		self.homepage_url = "https://milkie.cc/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
-		self.popular_url = "https://milkie.cc/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
-		self.search_url = "https://milkie.cc/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf&query="
+		origin = "https://milkie.cc"
+		self.homepage_url = origin +"/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
+		self.popular_url = origin +"/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
+		self.search_url = origin +"/api/v1/torrents?oby=d&odir=desc&categories=1&pi=0&ps=10&query="
+		self.search_url_rss = origin +"/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf&query="
+		self.browse_url = origin +"/browse/"
 
 	def popular(self, timeout: int = 10) -> list[Result]:
 		"""
@@ -654,7 +658,8 @@ class Milkie:
 
 	def search(self, query: str, timeout: int = 10) -> list[Result]:
 		url = self.search_url + urllib.parse.quote(query)
-		request = requests.get(url, timeout=timeout)
+		headers = {"authorization": "Bearer "+ os.getenv("REAL_DEBRID_AUTHORIZATION_HEADER", "")}
+		request = requests.get(url, headers=headers, timeout=timeout)
 		print(f"DEBUG: {url} (url)")
 		# print(f"DEBUG: {request.text} (request.text)")
 		# Get RSS feed results
@@ -679,6 +684,51 @@ class Milkie:
 		return results
 
 	def _get_results_from_request(self, request: requests.Response) -> list[Result]:
+		"""
+		Convenience function to convert the request into a list of Result objects
+
+		Args:
+			request (requests.Response): The request object
+
+		Returns:
+			list[Result]: A list of Result objects
+		"""
+		try:
+			json_results = request.json().get("torrents", [])
+			print(f"DEBUG: {json_results} (json_results)")
+		except ValueError as e:
+			print(f"ERROR: Could not parse JSON from response: {e}")
+			return []
+
+		results = [result["releaseName"] for result in json_results]
+		print(results)
+		results = Result.remove.codecs(results)
+		results = Result.remove.bad_characters(results)
+		results = fb.get_names([{
+				"filename":result,
+				"filename_old":result,
+				"page_url":self.browse_url + result_data["id"]
+			} for result, result_data in zip(results, json_results)])
+
+		for index, result in enumerate(results):
+			if result.get("tmdb_id") is None or result.get("tmdb_id") == "":
+				continue
+			try:
+				result_data = tmdb.details_movie(result["tmdb_id"])
+				# print(result_data)
+				if result_data.get("poster_path") is not None:
+					results[index]["poster_url"] = "https://image.tmdb.org/t/p/w200"+ result_data['poster_path']
+				if result_data.get("runtime") is not None:
+					results[index]["duration"] = result_data["runtime"]
+				if result_data.get("vote_average") is not None:
+					results[index]["score"] = f"{result_data['vote_average']/10:.0%}"
+			except (ValueError, TypeError) as e:
+				print(f"WARNING: Could not get TMDb details for '{result.get('title', 'Unknown')}' with ID '{result.get('tmdb_id')}': {e}")
+				continue
+
+		return [Result(scraper_object=self, **result) for result in results]
+
+	def _get_results_from_request_rss(self, request: requests.Response) -> list[Result]:
 		"""
 		Convenience function to convert the request into a list of Result objects
 

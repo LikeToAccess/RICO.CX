@@ -606,6 +606,7 @@ def callback():
             return redirect(url_for("pending"))
 
         # Send user back to homepage
+        print(url_for("index"))
         return redirect(url_for("index"))
     except InsecureTransportError as e:
         print(e)
