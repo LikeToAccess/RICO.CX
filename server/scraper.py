@@ -631,13 +631,58 @@ rd = RealDebrid()
 
 
 class Milkie:
+	# WORKING HTTP REQUEST EXAMPLE from INSOMNIA
+	# TODO: current HTTP requests are returning a 401 error when trying to use the API
+	# import requests
+
+	# url = "https://milkie.cc/api/v1/torrents"
+
+	# querystring = {"query":"f1 2025","oby":"created_at","odir":"desc","categories":"1","pi":"0","ps":"50"}
+
+	# payload = ""
+	# headers = {
+	# 	"accept": "application/json, text/plain, */*",
+	# 	"accept-language": "en-US,en;q=0.9,es;q=0.8",
+	# 	"authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzA3NjI0NzQsImlhdCI6MTc2NTU3ODQ3NCwic3ViIjoiNTg4NTYifQ.QePsnSmLf_PIyGNjXWS2kmv-EZkvSccei7ESTwcRFQw",
+	# 	"dnt": "1",
+	# 	"priority": "u=1, i",
+	# 	"referer": "https://milkie.cc/browse?query=f1%202025&oby=created_at&odir=desc&categories=1&pi=0&ps=50",
+	# 	"sec-ch-ua": ""Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"",
+	# 	"sec-ch-ua-mobile": "?0",
+	# 	"sec-ch-ua-platform": ""macOS"",
+	# 	"sec-fetch-dest": "empty",
+	# 	"sec-fetch-mode": "cors",
+	# 	"sec-fetch-site": "same-origin",
+	# 	"user-agent": "Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.2.9) Gecko/20100915 Gentoo Firefox/3.6.9"
+	# }
+
+	# response = requests.request("GET", url, data=payload, headers=headers, params=querystring)
+
+	# print(response.text)
 	def __init__(self):
 		origin = "https://milkie.cc"
-		self.homepage_url = origin +"/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
-		self.popular_url = origin +"/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf"
+		# Updated to use JSON API for consistency with _get_results_from_request
+		self.popular_url = origin +"/api/v1/torrents?oby=d&odir=desc&categories=1&pi=0&ps=10" 
 		self.search_url = origin +"/api/v1/torrents?oby=d&odir=desc&categories=1&pi=0&ps=10&query="
 		self.search_url_rss = origin +"/api/v1/rss?categories=1&key=splUBeBWfU0rUPRKJf&query="
 		self.browse_url = origin +"/browse/"
+		
+		# Headers from the working example
+		self.headers = {
+			"accept": "application/json, text/plain, */*",
+			"accept-language": "en-US,en;q=0.9,es;q=0.8",
+			"authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzA3NjI0NzQsImlhdCI6MTc2NTU3ODQ3NCwic3ViIjoiNTg4NTYifQ.QePsnSmLf_PIyGNjXWS2kmv-EZkvSccei7ESTwcRFQw",
+			"dnt": "1",
+			"priority": "u=1, i",
+			"referer": "https://milkie.cc/browse",
+			"sec-ch-ua": '"Google Chrome";v="143", "Chromium";v="143", "Not A(Brand";v="24"',
+			"sec-ch-ua-mobile": "?0",
+			"sec-ch-ua-platform": '"macOS"',
+			"sec-fetch-dest": "empty",
+			"sec-fetch-mode": "cors",
+			"sec-fetch-site": "same-origin",
+			"user-agent": "Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.2.9) Gecko/20100915 Gentoo Firefox/3.6.9"
+		}
 
 	def popular(self, timeout: int = 10) -> list[Result]:
 		"""
@@ -650,7 +695,7 @@ class Milkie:
 			list[Result]: A list of Result objects
 		"""
 		url = self.popular_url
-		request = requests.get(url, timeout=timeout)
+		request = requests.get(url, headers=self.headers, timeout=timeout)
 		print(f"DEBUG: {url} (url)")
 		results = self._get_results_from_request(request)
 
@@ -658,27 +703,14 @@ class Milkie:
 
 	def search(self, query: str, timeout: int = 10) -> list[Result]:
 		url = self.search_url + urllib.parse.quote(query)
-		headers = {"authorization": "Bearer "+ os.getenv("REAL_DEBRID_AUTHORIZATION_HEADER", "")}
+		# Update referer for search specifically (optional but good practice based on example)
+		headers = self.headers.copy()
+		headers["referer"] = f"https://milkie.cc/browse?query={urllib.parse.quote(query)}&oby=created_at&odir=desc&categories=1&pi=0&ps=50"
+		
 		request = requests.get(url, headers=headers, timeout=timeout)
 		print(f"DEBUG: {url} (url)")
 		# print(f"DEBUG: {request.text} (request.text)")
-		# Get RSS feed results
-		# rss_results = feedparser.parse(request.text).entries
-
-		# results = []
-		# for rss_result in rss_results:
-		# 	title = rss_result.title
-		# 	year = rss_result.published[:4]
-		# 	page_url = rss_result.link
-		# 	catagory = "movie"
-		# 	results.append(Result(
-		# 		scraper_object=self,
-		# 		title=title,
-		# 		release_year=year,
-		# 		page_url=page_url,
-		# 		catagory=catagory
-		# 	))
-
+		
 		results = self._get_results_from_request(request)
 
 		return results
@@ -695,7 +727,7 @@ class Milkie:
 		"""
 		try:
 			json_results = request.json().get("torrents", [])
-			print(f"DEBUG: {json_results} (json_results)")
+			# print(f"DEBUG: {json_results} (json_results)")
 		except ValueError as e:
 			print(f"ERROR: Could not parse JSON from response: {e}")
 			return []
@@ -707,7 +739,7 @@ class Milkie:
 		results = fb.get_names([{
 				"filename":result,
 				"filename_old":result,
-				"page_url":self.browse_url + result_data["id"]
+				"page_url":self.browse_url + str(result_data["id"])
 			} for result, result_data in zip(results, json_results)])
 
 		for index, result in enumerate(results):
