@@ -799,10 +799,42 @@ class Milkie:
 
 		return [Result(scraper_object=self, **result) for result in results]
 
+	def _get_magnet_from_page_url(self, page_url: str) -> str:
+		"""
+		Extracts the magnet link from the Milkie API using the ID from the page_url.
+		page_url example: https://milkie.cc/browse/HtXkpXyJlX7H
+		"""
+		try:
+			# Extract ID from URL
+			torrent_id_milkie = page_url.split("/")[-1]
+			api_url = f"https://milkie.cc/api/v1/torrents/{torrent_id_milkie}"
+			
+			# Use existing headers
+			request = requests.get(api_url, headers=self.headers, timeout=10)
+			request.raise_for_status()
+			
+			data = request.json()
+			infohash = data.get("torrent", {}).get("infoHash")
+			
+			if not infohash:
+				raise ValueError(f"No infoHash found for {page_url}")
+				
+			return f"magnet:?xt=urn:btih:{infohash}"
+		except Exception as e:
+			print(f"ERROR: Failed to get magnet from {page_url}: {e}")
+			raise e
+
 	def get_video_data(self, page_url: str) -> Result:
-		torrent_id = rd.add_torrent(page_url)["id"]
-		filename = rd.get_torrent_info(torrent_id)["filename"]
-		rd.remove_torrent(torrent_id)
+		# Get magnet link first
+		magnet_link = self._get_magnet_from_page_url(page_url)
+		# Add magnet instead of torrent URL
+		torrent_id = rd.add_magnet(magnet_link.split("btih:")[-1])
+		
+		try:
+			filename = rd.get_torrent_info(torrent_id)["filename"]
+		finally:
+			# Ensure we clean up even if getting info fails
+			rd.remove_torrent(torrent_id)
 
 		file_info_dict = {"filename": filename, "page_url": page_url}
 		result = fb.get_name(file_info_dict)
@@ -833,13 +865,19 @@ class Milkie:
 		return video_data
 
 	def get_video_url(self, page_url: str) -> str:
-		torrent_id = rd.add_torrent(page_url)["id"]
-		infohash = rd.get_torrent_info(torrent_id)["hash"]
-		rd.remove_torrent(torrent_id)
-		magnet_url = f"magnet:?xt=urn:btih:{infohash}"
-
-		print(f"DEBUG: {magnet_url} (magnet_url)")
-		return magnet_url
+		magnet_link = self._get_magnet_from_page_url(page_url)
+		# We already have the magnet link, no need to add/remove torrent just to get it back
+		# But we might need to verify it works or follows the pattern? 
+		# The original code added/removed to get infohash, but we typically already have infohash here.
+		
+		# Original logic:
+		# torrent_id = rd.add_torrent(page_url)["id"]
+		# infohash = rd.get_torrent_info(torrent_id)["hash"]
+		# rd.remove_torrent(torrent_id)
+		# magnet_url = f"magnet:?xt=urn:btih:{infohash}"
+		
+		print(f"DEBUG: {magnet_link} (magnet_url)")
+		return magnet_link
 
 
 def main():
