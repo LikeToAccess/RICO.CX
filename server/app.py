@@ -49,7 +49,7 @@ from settings import (
 )
 
 
-app = Flask(__name__, static_folder='static/client')
+app = Flask(__name__, static_folder='../client/dist', static_url_path='/client-dist')
 app.secret_key = os.urandom(24)
 
 login_manager = LoginManager()
@@ -110,7 +110,8 @@ def check_route_access():
             request.endpoint.startswith("pending"),
             request.endpoint.startswith("static"),
             request.endpoint.startswith("banned"),
-            request.endpoint.startswith("logout")
+            request.endpoint.startswith("logout"),
+            request.endpoint == "get_user"
         ]):
             return redirect(url_for("pending"))
         return None # Access granted (logged in + not banned + in group)
@@ -144,6 +145,10 @@ def serve_img(path):
 @app.route('/favicon.png')
 def serve_favicon():
     return send_from_directory(app.static_folder, 'favicon.png')
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('../static', path)
 
 @app.route('/static/js/settings.js')
 def serve_settings_js():
@@ -606,8 +611,8 @@ def callback():
             return redirect(url_for("pending"))
 
         # Send user back to homepage
-        print(url_for("index"))
-        return redirect(url_for("index"))
+        print("Redirecting to frontend development server.")
+        return redirect("https://127.0.0.1:3000/")
     except InsecureTransportError as e:
         print(e)
         return f"Something went wrong {e}", 400
