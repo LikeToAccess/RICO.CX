@@ -1,54 +1,67 @@
-# RICO.CX
+# RICO.CX v3
 
-RICO.GA but the letter A is replaced with a Q but the letter G is replaced with a C but the letter Q is replaced with an X
+A modern, fast, and maintainable media search and download management system.
 
-## Project Structure
+## Technologies
+- **Frontend:** React (Vite, TypeScript), Framer Motion, Axios, React Icons
+- **Backend:** Flask, SQLite
+- **Services:** Real-Debrid (Downloads), Milkie.cc (Search), FileBot (Media Identification)
 
-This repository is organized into two main directories:
+## Features
+- Universal search bar: Supports generic search strings, torrent hashes, and magnet links.
+- Direct Real-Debrid integration: Magnet links and hashes bypass search and go straight to download.
+- Modern UI: Smooth animations with Framer Motion and a clean dark aesthetic.
+- Object-Oriented Design: Abstraction for search results, users, and services.
 
-- **`server/`** - Backend Flask application and server-side components
-- **`Client/`** - Frontend client application
+## Setup
 
-See the README files in each directory for more details.
+### Backend
+1. Install Python 3.10+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Copy `.env` and fill in your API keys:
+   ```bash
+   RD_API_KEY=your_key
+   MILKIE_API_KEY=your_key
+   ```
 
-## Quick Start
+### Frontend
+1. Install Node.js
+2. Navigate to `frontend/`:
+   ```bash
+   cd frontend
+   npm install
+   ```
+3. Build the frontend (optional, for production):
+   ```bash
+   npm run build
+   ```
 
-### Server
+## Running the Project
 
-```bash
-cd server
-pip install -r requirements.txt
-python app.py
-```
+### Development
+1. Start the backend:
+   ```bash
+   python main.py
+   ```
+2. Start the frontend (in another terminal):
+   ```bash
+   cd frontend
+   npm run dev
+   ```
 
-### Client
+### Production
+The Flask app is configured to serve the `frontend/dist` directory.
+1. Build the frontend: `cd frontend && npm run build`
+2. Run the backend: `python main.py`
+3. Access at `http://localhost:5000`
 
-```bash
-cd Client
-npm install
-npm start
-```
-
----
-**Error code mapping:**
-
-- APPLE:  508 - Failed to download the video (download)
-- AVATAR: 508 - Failed to get video url (download)
-- ASTRO:  508 - Failed to get video data (download)
-- BANANA: 400 - No result provided for direct download link (download)
-- BAGEL:  400 - No query provided (searchone)
-- BANJO:  400 - No query provided (search)
-- CHERRY: 404 - No results found (getvideo)
-- DRAGON: 225 - Captcha failed (captcha)
-- EAGLE:  500 - download.status is invalid (download_api)
-- FALCON: 502 - Failed to communicate with the search service (search)
-- GUITAR: 403 - Real-Debrid API key is invalid (realdebrid)
-- HAMMER: 451 - Infringing video download (realdebrid)
-- IGLOO:  
-- JACKET:
-- KETTLE:
-- LEMON:  
-- MONKEY:
-- NINJA:  
-- ORANGE:
-- PANDA:  
+## Structure
+- `backend/`: Flask application, routes, and logic.
+  - `models/`: Domain models (User, Result).
+  - `services/`: External API integrations (RealDebrid, Milkie, FileBot).
+  - `routes/`: API endpoints.
+- `frontend/`: React application.
+  - `src/App.tsx`: Main UI logic and animations.

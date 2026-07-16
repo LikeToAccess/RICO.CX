@@ -1,0 +1,10 @@
+flask
+flask-cors
+flask-socketio
+gevent
+gevent-websocket
+requests
+python-dotenv
+torbox-api
+pyopenssl
+cryptography
