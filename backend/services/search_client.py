@@ -57,7 +57,7 @@ class SearchClient:
 
         try:
             logger.info(f"Searching Prowlarr for query: '{query}' (category: {category})")
-            resp = requests.get(url, headers=headers, params=params, timeout=15)
+            resp = requests.get(url, headers=headers, params=params, timeout=30)
             resp.raise_for_status()
             results_data = resp.json()
             

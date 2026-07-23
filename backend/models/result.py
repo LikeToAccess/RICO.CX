@@ -130,6 +130,14 @@ class TorrentResult:
         raw_clean = re.sub(r'[\.\-\_\+\[\]\(\)\:\,]', ' ', raw_clean)
         self.clean_title = ' '.join(raw_clean.split()).strip()
 
+        # Check for season subtitle following season/episode notation (e.g. S03: The Ed Gein Story)
+        sub_match = re.search(r'\b[sS]\d{1,2}[\s._-]*[:\-][\s._-]*([A-Za-z0-9\s._-]+?)(?=[\s._-]*(?:\d{3,4}p|4k|8k|web|bluray|hdtv|nf|\(|\[|$))', self.title)
+        if sub_match:
+            sub_text = re.sub(r'[\.\-\_\+\[\]\(\)\:\,]', ' ', sub_match.group(1))
+            sub_clean = ' '.join(sub_text.split()).strip()
+            if sub_clean and sub_clean.lower() not in ['complete', 'season', 'pack', 'series']:
+                self.clean_title = f"{self.clean_title} {sub_clean}".strip()
+
         # Codec detection
         codec_match = re.search(r'\b(x264|x265|hevc|h264|h\.264|h265|h\.265|av1|divx|xvid)\b', title_lower)
         if codec_match:

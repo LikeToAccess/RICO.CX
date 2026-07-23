@@ -234,9 +234,18 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                 tmdb_key = settings.get("tmdb_api_key") or os.environ.get("TMDB_API_KEY", "")
                 tmdb = TmdbClient(api_key=tmdb_key)
 
-                title_clean = metadata.get("title", "Unknown")
+                import urllib.parse
+                magnet_str = metadata.get("magnet", "")
+                dn_match = re.search(r'[?&]dn=([^&]+)', magnet_str)
+                if dn_match:
+                    full_release_name = urllib.parse.unquote_plus(dn_match.group(1))
+                else:
+                    full_release_name = metadata.get("filename") or metadata.get("title", "Unknown")
+
+                parsed_torrent = TorrentResult(title=full_release_name, size=0, download_url="", seeders=0, leechers=0, indexer="")
+                title_clean = parsed_torrent.clean_title or metadata.get("title", "Unknown")
                 category = metadata.get("category", "movie")
-                year = metadata.get("year")
+                year = parsed_torrent.year or metadata.get("year")
 
                 tmdb_id = None
                 official_title = title_clean
@@ -260,6 +269,13 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                         official_title = res["title"]
                         official_year = res["year"]
                         tmdb_id = res["id"]
+
+                        # Dynamically validate season against TMDb's available seasons for this show entry
+                        req_season = metadata.get("season")
+                        if req_season and tmdb_id:
+                            valid_seasons = tmdb.get_tv_seasons(tmdb_id)
+                            if valid_seasons and req_season not in valid_seasons:
+                                metadata["season"] = valid_seasons[0]
 
                 official_title_safe = make_safe_filename(official_title)
                 official_year_safe = make_safe_filename(str(official_year)) if official_year else ""
@@ -315,6 +331,11 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                                     episode = int(e_match.group(1))
 
                     if category == "tv":
+                        if tmdb_id and season:
+                            valid_seasons = tmdb.get_tv_seasons(tmdb_id)
+                            if valid_seasons and season not in valid_seasons:
+                                season = valid_seasons[0]
+
                         season_folder = f"Season {season:02d}" if season else "Season 01"
                         dest_dir = os.path.join(library_root, "TV SHOWS", folder_name, season_folder)
 
@@ -350,68 +371,142 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
 
                     logger.info(f"Local Transfer: {file_name} -> {temp_dest_path}")
 
-                    try:
-                        headers = {
-                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-                        }
-                        resp = requests.get(dl_link, headers=headers, stream=True, timeout=(15, 600))
-                        resp.raise_for_status()
+                    MAX_RETRIES = 10
+                    transfer_done = False
+                    start_time = time.time()
 
-                        file_downloaded = 0
-                        start_time = time.time()
-                        last_file_emit = 0
-
-                        with open(temp_dest_path, "wb") as f_out:
-                            for chunk in resp.iter_content(chunk_size=1024*1024):
-                                # Check if cancelled/deleted from database
-                                exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
-                                if not exists:
-                                    logger.info(f"Download {db_download_id} was cancelled during transfer. Aborting and cleaning up.")
-                                    local_transfer_success = False
-                                    break
-
-                                if chunk:
-                                    f_out.write(chunk)
-                                    file_downloaded += len(chunk)
-                                    total_downloaded += len(chunk)
-
-                                    elapsed = time.time() - start_time
-                                    current_speed = file_downloaded / elapsed if elapsed > 0 else 0
-                                    overall_progress = int((total_downloaded / total_files_size) * 100) if total_files_size > 0 else 0
-
-                                    now_f = time.time()
-                                    if now_f - last_file_emit > 1:
-                                        socketio.emit('download_progress', {
-                                            'id': torbox_id,
-                                            'title': metadata.get('title'),
-                                            'filename': metadata.get('filename'),
-                                            'magnet': metadata.get('magnet'),
-                                            'status': f"Moving file {idx+1}/{len(video_files)}",
-                                            'progress': overall_progress,
-                                            'speed': current_speed,
-                                            'size': total_files_size,
-                                            'user_id': user_id
-                                        })
-                                        last_file_emit = now_f
-
+                    for attempt in range(1, MAX_RETRIES + 1):
+                        # Check if cancelled/deleted from database
+                        exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
                         if not exists:
-                            break
-
-                        # Verify the file size match before removing the .crdownload extension
-                        if os.path.exists(temp_dest_path) and os.path.getsize(temp_dest_path) == file_size:
-                            logger.info(f"File verification successful (exact size match: {file_size} bytes). Renaming to final destination: {dest_path}")
-                            if os.path.exists(dest_path):
-                                os.remove(dest_path)
-                            os.rename(temp_dest_path, dest_path)
-                        else:
-                            actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else -1
-                            logger.error(f"File size mismatch for {file_name}: expected {file_size} bytes, got {actual_size} bytes. Retaining temporary .crdownload suffix.")
+                            logger.info(f"Download {db_download_id} was cancelled during transfer. Aborting and cleaning up.")
                             local_transfer_success = False
                             break
 
-                        logger.info(f"Local Transfer complete for file: {file_name}")
-                    except Exception as ex:
-                        logger.error(f"Local Transfer error: {ex}")
+                        # Refresh download link on retries in case token expired
+                        if attempt > 1:
+                            fresh_link = torbox.get_download_link(torbox_id, file_id)
+                            if fresh_link:
+                                dl_link = fresh_link
+
+                        existing_bytes = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
+
+                        if file_size > 0 and existing_bytes == file_size:
+                            logger.info(f"Local file transfer already complete ({existing_bytes} bytes).")
+                            transfer_done = True
+                            break
+
+                        if file_size > 0 and existing_bytes > file_size:
+                            logger.warning(f"Existing file size ({existing_bytes} bytes) exceeds target size ({file_size} bytes). Resetting {temp_dest_path}.")
+                            try:
+                                os.remove(temp_dest_path)
+                            except Exception:
+                                pass
+                            existing_bytes = 0
+
+                        headers = {
+                            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                        }
+                        if existing_bytes > 0:
+                            headers["Range"] = f"bytes={existing_bytes}-"
+                            logger.info(f"Resuming transfer for {file_name} from byte {existing_bytes} (Attempt {attempt}/{MAX_RETRIES})...")
+                        else:
+                            if attempt > 1:
+                                logger.info(f"Retrying transfer for {file_name} from start (Attempt {attempt}/{MAX_RETRIES})...")
+
+                        try:
+                            resp = requests.get(dl_link, headers=headers, stream=True, timeout=(15, 600))
+
+                            if resp.status_code == 206:
+                                open_mode = "ab"
+                                current_file_downloaded = existing_bytes
+                            elif resp.status_code == 200:
+                                open_mode = "wb"
+                                current_file_downloaded = 0
+                            elif resp.status_code == 416: # Range Not Satisfiable
+                                if file_size > 0 and existing_bytes >= file_size:
+                                    transfer_done = True
+                                    break
+                                open_mode = "wb"
+                                current_file_downloaded = 0
+                                if os.path.exists(temp_dest_path):
+                                    os.remove(temp_dest_path)
+                            else:
+                                resp.raise_for_status()
+                                open_mode = "wb" if existing_bytes == 0 else "ab"
+                                current_file_downloaded = existing_bytes if open_mode == "ab" else 0
+
+                            last_file_emit = 0
+                            with open(temp_dest_path, open_mode) as f_out:
+                                for chunk in resp.iter_content(chunk_size=1024*1024):
+                                    exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
+                                    if not exists:
+                                        logger.info(f"Download {db_download_id} was cancelled during transfer stream. Aborting.")
+                                        local_transfer_success = False
+                                        break
+
+                                    if chunk:
+                                        f_out.write(chunk)
+                                        current_file_downloaded += len(chunk)
+
+                                        overall_bytes = total_downloaded + current_file_downloaded
+                                        elapsed = time.time() - start_time
+                                        current_speed = current_file_downloaded / elapsed if elapsed > 0 else 0
+                                        overall_progress = int((overall_bytes / total_files_size) * 100) if total_files_size > 0 else 0
+
+                                        now_f = time.time()
+                                        if now_f - last_file_emit > 1:
+                                            socketio.emit('download_progress', {
+                                                'id': torbox_id,
+                                                'title': metadata.get('title'),
+                                                'filename': metadata.get('filename'),
+                                                'magnet': metadata.get('magnet'),
+                                                'status': f"Moving file {idx+1}/{len(video_files)}",
+                                                'progress': overall_progress,
+                                                'speed': current_speed,
+                                                'size': total_files_size,
+                                                'user_id': user_id
+                                            })
+                                            last_file_emit = now_f
+
+                            if not exists:
+                                local_transfer_success = False
+                                break
+
+                            actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
+                            if file_size > 0 and actual_size == file_size:
+                                transfer_done = True
+                                break
+                            elif file_size == 0 and actual_size > 0:
+                                transfer_done = True
+                                break
+                            else:
+                                logger.warning(f"Transfer incomplete for {file_name}: got {actual_size}/{file_size} bytes. Retrying resume in 3s (Attempt {attempt}/{MAX_RETRIES})...")
+                                time.sleep(3)
+
+                        except Exception as ex:
+                            actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
+                            logger.error(f"Local Transfer connection error for {file_name} at {actual_size}/{file_size} bytes: {ex}. Retrying resume in 3s (Attempt {attempt}/{MAX_RETRIES})...")
+                            time.sleep(3)
+
+                    if not exists:
+                        break
+
+                    if transfer_done and os.path.exists(temp_dest_path):
+                        final_size = os.path.getsize(temp_dest_path)
+                        if file_size == 0 or final_size == file_size:
+                            logger.info(f"File verification successful (exact size match: {final_size} bytes). Renaming to final destination: {dest_path}")
+                            if os.path.exists(dest_path):
+                                os.remove(dest_path)
+                            os.rename(temp_dest_path, dest_path)
+                            total_downloaded += final_size
+                            logger.info(f"Local Transfer complete for file: {file_name}")
+                        else:
+                            logger.error(f"File size mismatch for {file_name}: expected {file_size} bytes, got {final_size} bytes. Retaining temporary .crdownload suffix.")
+                            local_transfer_success = False
+                            break
+                    else:
+                        logger.error(f"Local Transfer failed after {MAX_RETRIES} attempts for file: {file_name}")
                         local_transfer_success = False
                         break
 
@@ -767,8 +862,13 @@ def download():
     episode = data.get('episode')
     size = data.get('size', 0)
 
-    if not magnet:
-        return jsonify({"error": "Missing magnet link"}), 400
+    if not magnet or not isinstance(magnet, str):
+        return jsonify({"error": "Missing or invalid magnet link"}), 400
+
+    try:
+        size = int(size)
+    except (ValueError, TypeError):
+        size = 0
 
     settings = get_server_settings()
     library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
@@ -1056,6 +1156,11 @@ def control_torrent():
             db.execute("DELETE FROM downloads WHERE torbox_id = ?", (str(torbox_id),))
         socketio.emit('download_deleted', {'torbox_id': str(torbox_id)})
         return jsonify({"success": True})
+    elif action in ("resume", "reannounce"):
+        res = torbox.control_torrent(str(torbox_id), action)
+        return jsonify({"success": True, "details": res})
+    else:
+        return jsonify({"error": f"Unsupported or invalid action: {action}"}), 400
 
 
 # SERVER SETTINGS MANAGEMENT (ADMIN ONLY)
@@ -1256,10 +1361,15 @@ def admin_delete_user():
     if not user_id:
         return jsonify({"error": "Missing user_id"}), 400
 
-    if int(user_id) == g.user.id:
+    try:
+        user_id_int = int(user_id)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Invalid user_id parameter"}), 400
+
+    if user_id_int == g.user.id:
         return jsonify({"error": "You cannot delete your own admin account."}), 400
 
     db = Database()
-    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.execute("DELETE FROM users WHERE id = ?", (user_id_int,))
     return jsonify({"success": True, "message": "User deleted successfully."})
 

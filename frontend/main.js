@@ -488,6 +488,9 @@ function getFilteredResults() {
     const clonedCard = { ...card, downloads: [...card.downloads] };
     
     clonedCard.downloads = clonedCard.downloads.filter(dl => {
+      // Direct Link entries (user-pasted magnet links) bypass UI filters
+      if (dl.indexer === "Direct Link") return true;
+
       // Category check
       if (categoryFilter === "movie" && card.is_tv) return false;
       if (categoryFilter === "tv" && !card.is_tv) return false;
@@ -495,8 +498,8 @@ function getFilteredResults() {
       // Resolution check
       if (resolutionFilter && dl.resolution !== resolutionFilter) return false;
       
-      // Seeds check (Direct Link magnet entries bypass min seeds filter)
-      if (dl.indexer !== "Direct Link" && dl.seeders < minSeedsFilter) return false;
+      // Seeds check
+      if (dl.seeders < minSeedsFilter) return false;
       
       // Size check
       if (maxSizeBytes > 0 && dl.size > maxSizeBytes) return false;
