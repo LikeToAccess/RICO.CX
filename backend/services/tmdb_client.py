@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import logging
 from typing import Optional
@@ -30,6 +31,14 @@ class TmdbClient:
             results = resp.json().get("results", [])
             if results:
                 match = results[0]
+                query_clean = re.sub(r'[^\w\s]', '', query.lower()).strip()
+                for r in results:
+                    title = r.get("title", "")
+                    r_clean = re.sub(r'[^\w\s]', '', title.lower()).strip()
+                    if r_clean == query_clean or r_clean.rstrip('s') == query_clean.rstrip('s'):
+                        match = r
+                        break
+
                 release_date = match.get("release_date", "")
                 match_year = release_date.split("-")[0] if release_date else ""
                 poster_path = match.get("poster_path")
@@ -64,6 +73,14 @@ class TmdbClient:
             results = resp.json().get("results", [])
             if results:
                 match = results[0]
+                query_clean = re.sub(r'[^\w\s]', '', query.lower()).strip()
+                for r in results:
+                    name = r.get("name", "")
+                    r_clean = re.sub(r'[^\w\s]', '', name.lower()).strip()
+                    if r_clean == query_clean or r_clean.rstrip('s') == query_clean.rstrip('s'):
+                        match = r
+                        break
+
                 first_air = match.get("first_air_date", "")
                 match_year = first_air.split("-")[0] if first_air else ""
                 poster_path = match.get("poster_path")
