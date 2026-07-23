@@ -848,24 +848,26 @@ function renderDownloadItem(dl) {
   const statusClass = getStatusClass(dl.status);
   const sizeText = dl.size ? formatBytes(dl.size) : "";
   
-  // Show Cancel button only for active downloads. Show DELETE button for completed downloads if owned or Admin.
-  const isInactive = statusClass.includes("completed") || statusClass.includes("failed");
+  const statusLower = (dl.status || "").toLowerCase();
+  const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded");
+  const isFailed = statusLower.includes("failed") || statusLower.includes("error") || statusLower.includes("stalled") || statusLower.includes("paused") || statusLower.includes("interrupted");
+  const isActive = !isCompleted && !isFailed;
   
   const isAdmin = state.user && state.user.group_name === "Admin";
   const isOwner = state.user && (
     dl.user_id === undefined || dl.user_id === null || Number(dl.user_id) === Number(state.user.id)
   );
-  const canDelete = isAdmin || isOwner;
+  const canControl = isAdmin || isOwner;
   
   let cancelBtnHtml = "";
   let resumeBtnHtml = "";
-  if (!statusClass.includes("completed")) {
+  if (isFailed && canControl) {
     resumeBtnHtml = `<button class="btn btn-secondary btn-resume-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px; margin-right: 4px;">RESUME</button>`;
-  }
-  if (!isInactive) {
-    cancelBtnHtml = `<button class="btn btn-danger btn-cancel-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px;">CANCEL</button>`;
-  } else if (statusClass.includes("completed") && canDelete) {
+    cancelBtnHtml = `<button class="btn btn-danger btn-cancel-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px;">CLEAR</button>`;
+  } else if (isCompleted && canControl) {
     cancelBtnHtml = `<button class="btn btn-danger btn-cancel-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px;">DELETE</button>`;
+  } else if (isActive && canControl) {
+    cancelBtnHtml = `<button class="btn btn-danger btn-cancel-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px;">CANCEL</button>`;
   }
   
   const displayTitle = dl.title || dl.filename || "Unknown Torrent";
@@ -962,8 +964,9 @@ function updateDownloadProgressUI(data) {
     
     const adminBtnEl = document.getElementById(`admin-dl-btn-${torrentId}`);
     if (adminBtnEl) {
-      const isCompleted = status.toLowerCase().includes("completed");
-      const isFailed = status.toLowerCase().includes("failed");
+      const statusLower = (status || "").toLowerCase();
+      const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded");
+      const isFailed = statusLower.includes("failed") || statusLower.includes("error") || statusLower.includes("stalled") || statusLower.includes("paused") || statusLower.includes("interrupted");
       let btnHtml = "";
       
       const isAdmin = state.user && state.user.group_name === "Admin";
@@ -971,10 +974,11 @@ function updateDownloadProgressUI(data) {
       if (canControl) {
         if (isCompleted) {
           btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">DELETE</button>`;
-        } else if (!isFailed) {
-          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
+        } else if (isFailed) {
+          btnHtml = `<button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0; margin-right: 4px;">RESUME</button>` +
+                    `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`;
         } else {
-          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`;
+          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
         }
       } else {
         btnHtml = `<span style="font-size: 0.65rem; color: var(--text-muted); font-style: italic;">No Access</span>`;
@@ -1837,19 +1841,20 @@ function renderAdminDownloadsList(downloads) {
     const isOwner = state.user && Number(dl.user_id) === Number(state.user.id);
     const canControl = isAdmin || isOwner;
     
-    const isCompleted = dl.status.toLowerCase().includes("completed");
-    const isFailed = dl.status.toLowerCase().includes("failed");
+    const statusLower = (dl.status || "").toLowerCase();
+    const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded");
+    const isFailed = statusLower.includes("failed") || statusLower.includes("error") || statusLower.includes("stalled") || statusLower.includes("paused") || statusLower.includes("interrupted");
     
     let btnHtml = "";
     if (canControl) {
       if (isCompleted) {
         btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">DELETE</button>`;
-      } else {
+      } else if (isFailed) {
         const resumeBtn = `<button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0; margin-right: 4px;">RESUME</button>`;
-        const cancelBtn = isFailed
-          ? `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`
-          : `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
-        btnHtml = `${resumeBtn}${cancelBtn}`;
+        const clearBtn = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`;
+        btnHtml = `${resumeBtn}${clearBtn}`;
+      } else {
+        btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
       }
     } else {
       btnHtml = `<span style="font-size: 0.65rem; color: var(--text-muted); font-style: italic;">No Access</span>`;

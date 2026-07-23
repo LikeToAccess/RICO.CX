@@ -4,6 +4,7 @@ import time
 import logging
 import requests
 import shutil
+from collections import deque
 from functools import wraps
 from flask import Blueprint, request, jsonify, g, redirect
 from ..models.user import User
@@ -62,12 +63,34 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+import threading
+
+ACTIVE_DOWNLOAD_TASKS = set()
+ACTIVE_TASKS_LOCK = threading.Lock()
+_RESUMPTION_INITIALIZED = False
+_RESUMPTION_LOCK = threading.Lock()
+
 # Background Task for Torbox Lifecycle Monitoring & Downloader
 def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
     """
     Background task to poll Torbox API for progress, update the DB,
     emit WebSocket updates, and stream files to local media folders when completed.
     """
+    task_key = (db_download_id, str(torbox_id))
+    with ACTIVE_TASKS_LOCK:
+        if task_key in ACTIVE_DOWNLOAD_TASKS:
+            logger.warning(f"Task already active for download ID {db_download_id} (Torbox ID: {torbox_id}). Aborting duplicate thread.")
+            return
+        ACTIVE_DOWNLOAD_TASKS.add(task_key)
+
+    try:
+        _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id)
+    finally:
+        with ACTIVE_TASKS_LOCK:
+            ACTIVE_DOWNLOAD_TASKS.discard(task_key)
+
+
+def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
     time.sleep(2)
     db = Database()
 
@@ -151,9 +174,13 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                 status_str = f"Downloading ({friendly_state})"
                 db_status = f"downloading ({friendly_state})"
 
-            # Throttle websocket emits to avoid flooding the network
+            # Throttle websocket emits and persist live state in database
             now = time.time()
             if now - last_emit_time > 1:
+                db.execute(
+                    "UPDATE downloads SET status = ?, progress = ?, speed = ?, size = ? WHERE id = ?",
+                    (status_str, progress, speed, size, db_download_id)
+                )
                 socketio.emit('download_progress', {
                     'id': torbox_id,
                     'title': metadata.get('title'),
@@ -371,7 +398,7 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
 
                     logger.info(f"Local Transfer: {file_name} -> {temp_dest_path}")
 
-                    MAX_RETRIES = 10
+                    MAX_RETRIES = 2
                     transfer_done = False
                     start_time = time.time()
 
@@ -389,7 +416,16 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                             if fresh_link:
                                 dl_link = fresh_link
 
-                        existing_bytes = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
+                        # If attempt 1 failed, corrupt resume, or attempt > 1: force fresh overwrite from byte 0
+                        if attempt > 1:
+                            if os.path.exists(temp_dest_path):
+                                try:
+                                    os.remove(temp_dest_path)
+                                except Exception:
+                                    pass
+                            existing_bytes = 0
+                        else:
+                            existing_bytes = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
 
                         if file_size > 0 and existing_bytes == file_size:
                             logger.info(f"Local file transfer already complete ({existing_bytes} bytes).")
@@ -412,7 +448,7 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                             logger.info(f"Resuming transfer for {file_name} from byte {existing_bytes} (Attempt {attempt}/{MAX_RETRIES})...")
                         else:
                             if attempt > 1:
-                                logger.info(f"Retrying transfer for {file_name} from start (Attempt {attempt}/{MAX_RETRIES})...")
+                                logger.info(f"Fallback to fresh redownload for {file_name} from start (Attempt {attempt}/{MAX_RETRIES})...")
 
                         try:
                             resp = requests.get(dl_link, headers=headers, stream=True, timeout=(15, 600))
@@ -455,6 +491,9 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                                 current_file_downloaded = 0
 
                             last_file_emit = 0
+                            speed_samples = deque()  # Stores (timestamp, bytes_downloaded) for 5s sliding window
+                            speed_samples.append((time.time(), current_file_downloaded))
+
                             with open(temp_dest_path, open_mode) as f_out:
                                 for chunk in resp.iter_content(chunk_size=1024*1024):
                                     exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
@@ -466,20 +505,35 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                                     if chunk:
                                         f_out.write(chunk)
                                         current_file_downloaded += len(chunk)
+                                        now_f = time.time()
+
+                                        # 5-second sliding window speed calculation
+                                        speed_samples.append((now_f, current_file_downloaded))
+                                        while speed_samples and (now_f - speed_samples[0][0]) > 5.0:
+                                            speed_samples.popleft()
+
+                                        if len(speed_samples) > 1:
+                                            time_diff = speed_samples[-1][0] - speed_samples[0][0]
+                                            bytes_diff = speed_samples[-1][1] - speed_samples[0][1]
+                                            current_speed = bytes_diff / time_diff if time_diff > 0 else 0
+                                        else:
+                                            current_speed = 0
 
                                         overall_bytes = total_downloaded + current_file_downloaded
-                                        elapsed = time.time() - start_time
-                                        current_speed = current_file_downloaded / elapsed if elapsed > 0 else 0
                                         overall_progress = int((overall_bytes / total_files_size) * 100) if total_files_size > 0 else 0
 
-                                        now_f = time.time()
                                         if now_f - last_file_emit > 1:
+                                            moving_status = f"Moving file {idx+1}/{len(video_files)}"
+                                            db.execute(
+                                                "UPDATE downloads SET status = ?, progress = ?, speed = ?, size = ? WHERE id = ?",
+                                                (moving_status, overall_progress, current_speed, total_files_size, db_download_id)
+                                            )
                                             socketio.emit('download_progress', {
                                                 'id': torbox_id,
                                                 'title': metadata.get('title'),
                                                 'filename': metadata.get('filename'),
                                                 'magnet': metadata.get('magnet'),
-                                                'status': f"Moving file {idx+1}/{len(video_files)}",
+                                                'status': moving_status,
                                                 'progress': overall_progress,
                                                 'speed': current_speed,
                                                 'size': total_files_size,
@@ -499,13 +553,11 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                                 transfer_done = True
                                 break
                             else:
-                                logger.warning(f"Transfer incomplete for {file_name}: got {actual_size}/{file_size} bytes. Retrying resume in 3s (Attempt {attempt}/{MAX_RETRIES})...")
-                                time.sleep(3)
+                                logger.warning(f"Transfer incomplete for {file_name}: got {actual_size}/{file_size} bytes. Falling back to fresh overwrite (Attempt {attempt}/{MAX_RETRIES})...")
 
                         except Exception as ex:
                             actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
-                            logger.error(f"Local Transfer connection error for {file_name} at {actual_size}/{file_size} bytes: {ex}. Retrying resume in 3s (Attempt {attempt}/{MAX_RETRIES})...")
-                            time.sleep(3)
+                            logger.error(f"Local Transfer connection error for {file_name} at {actual_size}/{file_size} bytes: {ex}. Retrying...")
 
                     if not exists:
                         break
@@ -1187,6 +1239,12 @@ def control_torrent():
                 "magnet": row["magnet"],
                 "category": row["category"]
             }
+
+            task_key = (db_download_id, str(torbox_id))
+            with ACTIVE_TASKS_LOCK:
+                if task_key in ACTIVE_DOWNLOAD_TASKS:
+                    return jsonify({"success": True, "message": "Download is already active."})
+
             db.execute("UPDATE downloads SET status = 'queued' WHERE id = ?", (db_download_id,))
             start_bg_task(
                 monitor_and_download_task,
@@ -1440,6 +1498,18 @@ def init_download_resumption():
     """
     Startup recovery task: Automatically resumes any downloads interrupted by server crash or restart.
     """
+    # Guard against duplicate execution in Flask/Werkzeug dev reloader parent process
+    if os.environ.get("WERKZEUG_RUN_MAIN") != "true" and os.environ.get("WERKZEUG_SERVER_FD") is not None:
+        logger.info("Startup Recovery: Skipping parent process execution in Werkzeug reloader.")
+        return
+
+    global _RESUMPTION_INITIALIZED
+    with _RESUMPTION_LOCK:
+        if _RESUMPTION_INITIALIZED:
+            logger.info("Startup Recovery: Already initialized in this process. Skipping duplicate run.")
+            return
+        _RESUMPTION_INITIALIZED = True
+
     def run_resumption():
         time.sleep(2)  # Wait for Flask & SocketIO startup to stabilize
         db = Database()
@@ -1460,6 +1530,13 @@ def init_download_resumption():
                 "magnet": r["magnet"],
                 "category": r["category"]
             }
+
+            task_key = (db_download_id, str(torbox_id))
+            with ACTIVE_TASKS_LOCK:
+                if task_key in ACTIVE_DOWNLOAD_TASKS:
+                    logger.info(f"Startup Recovery: Download ID {db_download_id} is already active. Skipping duplicate launch.")
+                    continue
+
             logger.info(f"Startup Recovery: Auto-resuming download ID {db_download_id} (Torbox ID: {torbox_id}) - '{r['title']}'")
             db.execute("UPDATE downloads SET status = 'queued' WHERE id = ?", (db_download_id,))
             start_bg_task(
