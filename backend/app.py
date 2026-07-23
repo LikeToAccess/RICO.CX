@@ -46,6 +46,10 @@ def create_app():
     # Initialize socketio with the app
     socketio.init_app(app)
 
+    # Automatically resume any interrupted downloads on startup
+    from .routes.api import init_download_resumption
+    init_download_resumption()
+
     @app.route('/')
     def serve():
         return send_from_directory(app.static_folder, 'index.html')

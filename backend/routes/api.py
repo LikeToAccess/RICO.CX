@@ -957,7 +957,7 @@ def download():
             'season': season,
             'episode': episode
         }
-        socketio.start_background_task(
+        start_bg_task(
             monitor_and_download_task,
             g.user.id,
             torrent_id,
@@ -1156,7 +1156,42 @@ def control_torrent():
             db.execute("DELETE FROM downloads WHERE torbox_id = ?", (str(torbox_id),))
         socketio.emit('download_deleted', {'torbox_id': str(torbox_id)})
         return jsonify({"success": True})
-    elif action in ("resume", "reannounce"):
+    elif action == "resume":
+        # Best-effort resume signal to Torbox
+        res = torbox.control_torrent(str(torbox_id), "resume")
+
+        if row:
+            db_download_id = row["id"]
+            target_user_id = row["user_id"] or g.user.id
+            metadata = {
+                "title": row["title"],
+                "filename": row["filename"],
+                "magnet": row["magnet"],
+                "category": row["category"]
+            }
+            db.execute("UPDATE downloads SET status = 'queued' WHERE id = ?", (db_download_id,))
+            start_bg_task(
+                monitor_and_download_task,
+                target_user_id,
+                str(torbox_id),
+                metadata,
+                db_download_id
+            )
+            socketio.emit('download_progress', {
+                'id': str(torbox_id),
+                'title': row["title"],
+                'filename': row["filename"],
+                'magnet': row["magnet"],
+                'status': 'queued',
+                'progress': row["progress"] or 0,
+                'speed': 0,
+                'size': row["size"] or 0,
+                'user_id': target_user_id
+            })
+            return jsonify({"success": True, "message": "Download resumption started.", "details": res})
+        else:
+            return jsonify({"error": "Download record not found in database"}), 404
+    elif action == "reannounce":
         res = torbox.control_torrent(str(torbox_id), action)
         return jsonify({"success": True, "details": res})
     else:
@@ -1372,4 +1407,50 @@ def admin_delete_user():
     db = Database()
     db.execute("DELETE FROM users WHERE id = ?", (user_id_int,))
     return jsonify({"success": True, "message": "User deleted successfully."})
+
+
+def start_bg_task(target, *args, **kwargs):
+    if getattr(socketio, 'server', None) is not None:
+        socketio.start_background_task(target, *args, **kwargs)
+    else:
+        import threading
+        t = threading.Thread(target=target, args=args, kwargs=kwargs, daemon=True)
+        t.start()
+
+
+def init_download_resumption():
+    """
+    Startup recovery task: Automatically resumes any downloads interrupted by server crash or restart.
+    """
+    def run_resumption():
+        time.sleep(2)  # Wait for Flask & SocketIO startup to stabilize
+        db = Database()
+        rows = db.query("SELECT * FROM downloads WHERE status NOT IN ('completed')")
+        if not rows:
+            logger.info("Startup Recovery: No incomplete downloads found.")
+            return
+        logger.info(f"Startup Recovery: Found {len(rows)} incomplete downloads to evaluate.")
+        for r in rows:
+            torbox_id = r["torbox_id"]
+            if not torbox_id or str(torbox_id).startswith("skipped_"):
+                continue
+            db_download_id = r["id"]
+            user_id = r["user_id"] or 1
+            metadata = {
+                "title": r["title"],
+                "filename": r["filename"],
+                "magnet": r["magnet"],
+                "category": r["category"]
+            }
+            logger.info(f"Startup Recovery: Auto-resuming download ID {db_download_id} (Torbox ID: {torbox_id}) - '{r['title']}'")
+            db.execute("UPDATE downloads SET status = 'queued' WHERE id = ?", (db_download_id,))
+            start_bg_task(
+                monitor_and_download_task,
+                user_id,
+                torbox_id,
+                metadata,
+                db_download_id
+            )
+
+    start_bg_task(run_resumption)
 

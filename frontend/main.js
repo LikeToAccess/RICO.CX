@@ -858,6 +858,10 @@ function renderDownloadItem(dl) {
   const canDelete = isAdmin || isOwner;
   
   let cancelBtnHtml = "";
+  let resumeBtnHtml = "";
+  if (!statusClass.includes("completed")) {
+    resumeBtnHtml = `<button class="btn btn-secondary btn-resume-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px; margin-right: 4px;">RESUME</button>`;
+  }
   if (!isInactive) {
     cancelBtnHtml = `<button class="btn btn-danger btn-cancel-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px;">CANCEL</button>`;
   } else if (statusClass.includes("completed") && canDelete) {
@@ -875,7 +879,10 @@ function renderDownloadItem(dl) {
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; flex-shrink: 0;">
           <span class="dl-item-status dl-status-${statusClass}">${dl.status}</span>
-          ${cancelBtnHtml}
+          <div style="display: flex; gap: 2px;">
+            ${resumeBtnHtml}
+            ${cancelBtnHtml}
+          </div>
         </div>
       </div>
       <div class="dl-progress-track">
@@ -1083,9 +1090,14 @@ function setupAppShellListeners() {
     navigate("dashboard");
   });
   
-  // Delegate click events for the download cancel/delete buttons
+  // Delegate click events for the download cancel/delete/resume buttons
   document.getElementById("downloads-sidebar").addEventListener("click", async (e) => {
-    if (e.target.classList.contains("btn-cancel-dl")) {
+    if (e.target.classList.contains("btn-resume-dl")) {
+      const torboxId = e.target.getAttribute("data-torbox-id");
+      e.target.disabled = true;
+      e.target.textContent = "RESUMING...";
+      await resumeDownload(torboxId);
+    } else if (e.target.classList.contains("btn-cancel-dl")) {
       const torboxId = e.target.getAttribute("data-torbox-id");
       const isDelete = e.target.textContent === "DELETE";
       const confirmMsg = isDelete
@@ -1098,6 +1110,33 @@ function setupAppShellListeners() {
       }
     }
   });
+}
+
+async function resumeDownload(torboxId) {
+  try {
+    const headers = {
+      "Content-Type": "application/json"
+    };
+    if (state.token) {
+      headers["Authorization"] = `Bearer ${state.token}`;
+    }
+    const resp = await fetch("/api/torbox/control", {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify({ torbox_id: torboxId, action: "resume" })
+    });
+    if (resp.ok) {
+      fetchDownloads();
+    } else {
+      const errData = await resp.json();
+      alert(`Failed to resume: ${errData.error}`);
+      fetchDownloads();
+    }
+  } catch (err) {
+    console.error("Resume download failure:", err);
+    alert("Network error resuming download.");
+    fetchDownloads();
+  }
 }
 
 async function cancelDownload(torboxId) {
@@ -1564,14 +1603,21 @@ function setupAdminContentListeners() {
       if (e.target.classList.contains("btn-admin-action")) {
         const torboxId = e.target.getAttribute("data-torbox-id");
         const action = e.target.getAttribute("data-action");
-        const confirmMsg = action === "delete"
-          ? "Are you sure you want to delete this completed download and remove its files from the server?"
-          : "Are you sure you want to cancel this transfer and remove any temporary files?";
-        if (confirm(confirmMsg)) {
+        if (action === "resume") {
           e.target.disabled = true;
-          e.target.textContent = action === "delete" ? "DELETING..." : "ABORTING...";
-          await cancelDownload(torboxId);
+          e.target.textContent = "RESUMING...";
+          await resumeDownload(torboxId);
           fetchAdminDownloads();
+        } else {
+          const confirmMsg = action === "delete"
+            ? "Are you sure you want to delete this completed download and remove its files from the server?"
+            : "Are you sure you want to cancel this transfer and remove any temporary files?";
+          if (confirm(confirmMsg)) {
+            e.target.disabled = true;
+            e.target.textContent = action === "delete" ? "DELETING..." : "ABORTING...";
+            await cancelDownload(torboxId);
+            fetchAdminDownloads();
+          }
         }
       }
     });
@@ -1798,10 +1844,12 @@ function renderAdminDownloadsList(downloads) {
     if (canControl) {
       if (isCompleted) {
         btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">DELETE</button>`;
-      } else if (!isFailed) {
-        btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
       } else {
-        btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`;
+        const resumeBtn = `<button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0; margin-right: 4px;">RESUME</button>`;
+        const cancelBtn = isFailed
+          ? `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`
+          : `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
+        btnHtml = `${resumeBtn}${cancelBtn}`;
       }
     } else {
       btnHtml = `<span style="font-size: 0.65rem; color: var(--text-muted); font-style: italic;">No Access</span>`;
