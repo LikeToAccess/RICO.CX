@@ -293,12 +293,26 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                         season = int(tv_match.group(1))
                         episode = int(tv_match.group(2))
                     else:
-                        season_match = re.search(r'\b[sS]eason\s*(\d{1,2})\b', file_name, re.IGNORECASE)
-                        if season_match:
-                            season = int(season_match.group(1))
-                        episode_match = re.search(r'\b(?:[eE]pisode|[eE]p|[eE])\s*(\d{1,2})\b', file_name, re.IGNORECASE)
-                        if episode_match:
-                            episode = int(episode_match.group(1))
+                        x_match = re.search(r'\b(\d{1,2})x(\d{1,2})\b', file_name)
+                        if x_match:
+                            season = int(x_match.group(1))
+                            episode = int(x_match.group(2))
+                        else:
+                            season_match = re.search(r'\b[sS]eason\s*(\d{1,2})\b', file_name, re.IGNORECASE)
+                            if season_match:
+                                season = int(season_match.group(1))
+                            elif not season:
+                                s_match = re.search(r'\b[sS](\d{1,2})\b', file_name)
+                                if s_match:
+                                    season = int(s_match.group(1))
+
+                            episode_match = re.search(r'\b(?:[eE]pisode|[eE]p)\.?\s*(\d{1,2})\b', file_name, re.IGNORECASE)
+                            if episode_match:
+                                episode = int(episode_match.group(1))
+                            elif not episode:
+                                e_match = re.search(r'\b[eE](\d{1,2})\b', file_name)
+                                if e_match:
+                                    episode = int(e_match.group(1))
 
                     if category == "tv":
                         season_folder = f"Season {season:02d}" if season else "Season 01"

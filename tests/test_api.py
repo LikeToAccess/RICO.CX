@@ -305,5 +305,50 @@ class TestAPI(unittest.TestCase):
         self.assertEqual(len(data3['data']), 1)
         self.assertEqual(data3['data'][0]['clean_title'], "John Wick Chapter 2")
 
+    def test_search_tv_show_magnet_detection(self):
+        magnet = "magnet:?xt=urn:btih:B4938B2D9D47CE9947C1B511536E91731BEE57D7&dn=Monsters.The.Lyle.and.Erik.Menendez.Story.S01.COMPLETE.1080p.NF.WEB-DL.H.264-EniaHD&tr=http%3A%2F%2Fbt.t-ru.org%2Fann"
+        import urllib.parse
+        response = self.client.get(f'/api/search?q={urllib.parse.quote(magnet)}')
+        data = json.loads(response.data)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data['type'], 'search_results')
+        self.assertEqual(len(data['data']), 1)
+        card = data['data'][0]
+        self.assertTrue(card['is_tv'], "Magnet release with S01 should be detected as a TV Show")
+        self.assertEqual(card['clean_title'], "Monsters The Lyle and Erik Menendez Story")
+        self.assertEqual(card['downloads'][0]['season'], 1)
+
+    def test_torrent_result_tv_parsing(self):
+        from backend.models.result import TorrentResult
+
+        tv_cases = [
+            ("Monsters.The.Lyle.and.Erik.Menendez.Story.S01.COMPLETE.1080p.NF.WEB-DL.H.264-EniaHD", "Monsters The Lyle and Erik Menendez Story", 1, None),
+            ("Stranger.Things.S04E01.1080p.NF.WEB-DL", "Stranger Things", 4, 1),
+            ("The.Office.US.1x05.720p.HDTV", "The Office US", 1, 5),
+            ("Severance.Season.1.1080p.WEB-DL", "Severance", 1, None),
+            ("House.of.the.Dragon.Ep.02.1080p", "House of the Dragon", None, 2),
+            ("The.Wire.Complete.Series.720p.BluRay", "The Wire", None, None)
+        ]
+        for title, expected_clean, expected_season, expected_ep in tv_cases:
+            tr = TorrentResult(title=title, size=100, download_url="", seeders=0, leechers=0, indexer="")
+            self.assertTrue(tr.is_tv, f"Expected {title} to be detected as TV")
+            self.assertEqual(tr.clean_title, expected_clean)
+            if expected_season is not None:
+                self.assertEqual(tr.season, expected_season, f"Expected season {expected_season} for {title}")
+            if expected_ep is not None:
+                self.assertEqual(tr.episode, expected_ep, f"Expected episode {expected_ep} for {title}")
+
+        movie_cases = [
+            ("Inception.2010.1080p.BluRay.x264-x0r", "Inception", 2010),
+            ("Avatar.The.Way.of.Water.2022.2160p.UHD", "Avatar The Way of Water", 2022)
+        ]
+        for title, expected_clean, expected_year in movie_cases:
+            tr = TorrentResult(title=title, size=100, download_url="", seeders=0, leechers=0, indexer="")
+            self.assertFalse(tr.is_tv, f"Expected {title} to be detected as Movie")
+            self.assertEqual(tr.clean_title, expected_clean)
+            self.assertEqual(tr.year, expected_year)
+
 if __name__ == '__main__':
     unittest.main()
+

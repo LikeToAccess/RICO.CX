@@ -28,24 +28,68 @@ class TorrentResult:
 
     def _parse_metadata(self):
         title_lower = self.title.lower()
-        
-        # 1. Detect TV show season/episode patterns
-        # S01E02, S1E2, Season 1 Episode 2, E01, Ep.01, S01, etc.
-        tv_match = re.search(r'\b[sS](\d{1,2})[eE](\d{1,2})\b', self.title)
-        if tv_match:
+        tv_match_pos = None
+
+        # 1. Detect S01E02, S1E2, S01E01-E04, S01E01-04
+        s_e_match = re.search(r'\b[sS](\d{1,2})[eE](\d{1,2})\b', self.title)
+        if s_e_match:
             self.is_tv = True
-            self.season = int(tv_match.group(1))
-            self.episode = int(tv_match.group(2))
-        else:
-            season_match = re.search(r'\b[sS]eason\s*(\d{1,2})\b', self.title, re.IGNORECASE)
+            self.season = int(s_e_match.group(1))
+            self.episode = int(s_e_match.group(2))
+            tv_match_pos = s_e_match.start()
+
+        # 2. Detect 1x02, 01x02
+        if not self.is_tv:
+            x_match = re.search(r'\b(\d{1,2})x(\d{1,2})\b', self.title)
+            if x_match:
+                self.is_tv = True
+                self.season = int(x_match.group(1))
+                self.episode = int(x_match.group(2))
+                tv_match_pos = x_match.start()
+
+        # 3. Explicit Season: Season 1, Seasons 1-3, Season.01, Season_1
+        if self.season is None:
+            season_match = re.search(r'\b[sS]eason[s]?[\s._-]*(\d{1,2})\b', self.title, re.IGNORECASE)
             if season_match:
                 self.is_tv = True
                 self.season = int(season_match.group(1))
-                
-            episode_match = re.search(r'\b(?:[eE]pisode|[eE]p|[eE])\s*(\d{1,2})\b', self.title, re.IGNORECASE)
-            if episode_match:
+                if tv_match_pos is None or season_match.start() < tv_match_pos:
+                    tv_match_pos = season_match.start()
+
+        # 4. Standalone Season token: S01, S1, S01-S03, S01-03
+        if self.season is None:
+            s_match = re.search(r'\b[sS](\d{1,2})\b', self.title)
+            if s_match:
                 self.is_tv = True
-                self.episode = int(episode_match.group(1))
+                self.season = int(s_match.group(1))
+                if tv_match_pos is None or s_match.start() < tv_match_pos:
+                    tv_match_pos = s_match.start()
+
+        # 5. Explicit Episode word: Episode 1, Ep 1, Ep.01, Ep_01
+        if self.episode is None:
+            ep_match = re.search(r'\b(?:[eE]pisode|[eE]p)[\s._-]*(\d{1,2})\b', self.title, re.IGNORECASE)
+            if ep_match:
+                self.is_tv = True
+                self.episode = int(ep_match.group(1))
+                if tv_match_pos is None or ep_match.start() < tv_match_pos:
+                    tv_match_pos = ep_match.start()
+
+        # 6. Standalone Episode token: E01, E1
+        if self.episode is None:
+            e_match = re.search(r'\b[eE](\d{1,2})\b', self.title)
+            if e_match:
+                self.is_tv = True
+                self.episode = int(e_match.group(1))
+                if tv_match_pos is None or e_match.start() < tv_match_pos:
+                    tv_match_pos = e_match.start()
+
+        # 7. Complete Series / Complete Season / Season Pack / Series Pack keywords
+        if not self.is_tv:
+            series_kw = re.search(r'\b(?:complete[\s._-]+(?:series|season)|season[\s._-]+pack|series[\s._-]+pack)\b', title_lower)
+            if series_kw:
+                self.is_tv = True
+                if tv_match_pos is None or series_kw.start() < tv_match_pos:
+                    tv_match_pos = series_kw.start()
 
         # 2. Detect Year
         year_match = re.search(r'\b(19\d{2}|20\d{2})\b', self.title)
@@ -56,8 +100,8 @@ class TorrentResult:
         split_indices = []
         if year_match:
             split_indices.append(year_match.start())
-        if tv_match:
-            split_indices.append(tv_match.start())
+        if tv_match_pos is not None:
+            split_indices.append(tv_match_pos)
         
         # Resolution detection
         res_match = re.search(r'\b(2160p|1080p|720p|480p|360p|4k|8k)\b', title_lower)
@@ -87,9 +131,9 @@ class TorrentResult:
         self.clean_title = ' '.join(raw_clean.split()).strip()
 
         # Codec detection
-        codec_match = re.search(r'\b(x264|x265|hevc|h264|h265|av1|divx|xvid)\b', title_lower)
+        codec_match = re.search(r'\b(x264|x265|hevc|h264|h\.264|h265|h\.265|av1|divx|xvid)\b', title_lower)
         if codec_match:
-            self.codec = codec_match.group(1).upper()
+            self.codec = codec_match.group(1).replace('.', '').upper()
 
         # Source detection
         source_match = re.search(r'\b(bluray|blu-ray|web-dl|webdl|webrip|web|brrip|bdrip|dvdrip|hdtv)\b', title_lower)
