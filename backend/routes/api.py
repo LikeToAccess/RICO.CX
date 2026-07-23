@@ -417,10 +417,28 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                         try:
                             resp = requests.get(dl_link, headers=headers, stream=True, timeout=(15, 600))
 
+                            # Extract authoritative total file size from response headers if available
+                            content_range = resp.headers.get("Content-Range")
+                            content_length = resp.headers.get("Content-Length")
+                            if content_range:
+                                try:
+                                    header_total = int(content_range.split('/')[-1])
+                                    if header_total > 0:
+                                        file_size = header_total
+                                except Exception:
+                                    pass
+                            elif resp.status_code == 200 and content_length:
+                                try:
+                                    header_total = int(content_length)
+                                    if header_total > 0:
+                                        file_size = header_total
+                                except Exception:
+                                    pass
+
                             if resp.status_code == 206:
                                 open_mode = "ab"
                                 current_file_downloaded = existing_bytes
-                            elif resp.status_code == 200:
+                            elif resp.status_code in (200, 203):
                                 open_mode = "wb"
                                 current_file_downloaded = 0
                             elif resp.status_code == 416: # Range Not Satisfiable
@@ -433,8 +451,8 @@ def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
                                     os.remove(temp_dest_path)
                             else:
                                 resp.raise_for_status()
-                                open_mode = "wb" if existing_bytes == 0 else "ab"
-                                current_file_downloaded = existing_bytes if open_mode == "ab" else 0
+                                open_mode = "wb"
+                                current_file_downloaded = 0
 
                             last_file_emit = 0
                             with open(temp_dest_path, open_mode) as f_out:
