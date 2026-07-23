@@ -495,8 +495,8 @@ function getFilteredResults() {
       // Resolution check
       if (resolutionFilter && dl.resolution !== resolutionFilter) return false;
       
-      // Seeds check
-      if (dl.seeders < minSeedsFilter) return false;
+      // Seeds check (Direct Link magnet entries bypass min seeds filter)
+      if (dl.indexer !== "Direct Link" && dl.seeders < minSeedsFilter) return false;
       
       // Size check
       if (maxSizeBytes > 0 && dl.size > maxSizeBytes) return false;
