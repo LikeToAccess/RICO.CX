@@ -264,6 +264,11 @@ async function fetchDownloads() {
 }
 
 async function searchTrackers(query, category) {
+  // Dismiss mobile virtual keyboard immediately
+  if (document.activeElement && typeof document.activeElement.blur === "function") {
+    document.activeElement.blur();
+  }
+
   const container = document.getElementById("results-list");
   const loaderEl = document.getElementById("search-loading");
   
@@ -410,7 +415,7 @@ function renderDashboardContent() {
     <form id="search-form" class="search-block" onsubmit="return false;">
       <div class="search-row">
         <div class="search-input-wrapper">
-          <input type="text" id="search-input" class="form-input" required placeholder="Search movies, TV shows, or paste a magnet link/torrent hash...">
+          <input type="text" id="search-input" class="form-input" required placeholder="Search movies, TV shows, or paste a magnet link/torrent hash..." enterkeyhint="search" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
           <button type="button" id="btn-clear-search" class="clear-search-btn" title="Clear all search & filters">&times;</button>
         </div>
         <button type="submit" class="btn btn-primary">Search</button>
@@ -1247,16 +1252,30 @@ function setupDashboardContentListeners() {
       saveRecentSearch();
       updateClearButtonVisibility();
     });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        searchInput.blur();
+        if (document.activeElement && typeof document.activeElement.blur === "function") {
+          document.activeElement.blur();
+        }
+      }
+    });
   }
 
   // Search submission
   const searchForm = document.getElementById("search-form");
-  searchForm.addEventListener("submit", (e) => {
-    e.preventDefault();
-    const query = searchInput.value;
-    const category = document.getElementById("filter-category").value;
-    searchTrackers(query, category);
-  });
+  if (searchForm) {
+    searchForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (searchInput) searchInput.blur();
+      if (document.activeElement && typeof document.activeElement.blur === "function") {
+        document.activeElement.blur();
+      }
+      const query = searchInput ? searchInput.value : "";
+      const category = document.getElementById("filter-category") ? document.getElementById("filter-category").value : "";
+      searchTrackers(query, category);
+    });
+  }
 
   // Attach dynamic real-time input change triggers to advanced filters
   const filterElements = [
