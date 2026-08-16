@@ -8,7 +8,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-socketio = SocketIO(cors_allowed_origins="*", async_mode='threading')
+socketio_async_mode = os.environ.get("SOCKETIO_ASYNC_MODE")
+socketio = SocketIO(cors_allowed_origins="*", async_mode=socketio_async_mode)
 
 def create_app():
     # Determine the static folder. If frontend/dist exists, serve from it. Otherwise, serve from frontend/ directly.
@@ -50,14 +51,34 @@ def create_app():
     from .routes.api import init_download_resumption
     init_download_resumption()
 
+    @app.before_request
+    def block_sensitive_files():
+        from flask import request, jsonify
+        path = request.path.lower()
+        filename = os.path.basename(path)
+        if filename.startswith('.') or any(path.endswith(ext) for ext in ['.env', '.db', '.sqlite', '.py', '.sql', '.sh', '.bak', '.log', '.err', '.md', '.yml', '.yaml']):
+            return jsonify({"error": "Access denied"}), 403
+
     @app.route('/')
     def serve():
         return send_from_directory(app.static_folder, 'index.html')
 
     @app.route('/<path:path>')
     def catch_all(path):
-        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+        from flask import jsonify
+        # Prevent access to hidden files/directories (starting with .) or sensitive files (.env, .db, .py, etc.)
+        filename = os.path.basename(path)
+        if filename.startswith('.') or any(path.lower().endswith(ext) for ext in ['.env', '.db', '.sqlite', '.py', '.sql', '.sh', '.bak', '.log', '.err', '.md', '.yml', '.yaml']):
+            return jsonify({"error": "Access denied"}), 403
+
+        # Prevent directory traversal outside static_folder
+        safe_path = os.path.abspath(os.path.join(app.static_folder, path))
+        if not safe_path.startswith(os.path.abspath(app.static_folder)):
+            return jsonify({"error": "Access denied"}), 403
+
+        if path != "" and os.path.exists(safe_path) and os.path.isfile(safe_path):
             return send_from_directory(app.static_folder, path)
+
         return send_from_directory(app.static_folder, 'index.html')
 
     @app.errorhandler(404)

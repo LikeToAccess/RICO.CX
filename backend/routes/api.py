@@ -1520,7 +1520,7 @@ def init_download_resumption():
         logger.info(f"Startup Recovery: Found {len(rows)} incomplete downloads to evaluate.")
         for r in rows:
             torbox_id = r["torbox_id"]
-            if not torbox_id or str(torbox_id).startswith("skipped_"):
+            if not torbox_id or str(torbox_id).startswith("skipped_") or str(torbox_id).startswith("legacy_"):
                 continue
             db_download_id = r["id"]
             user_id = r["user_id"] or 1
