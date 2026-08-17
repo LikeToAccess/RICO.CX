@@ -1,9 +1,11 @@
+"""Client for querying Prowlarr indexers and aggregating torrent search results."""
 import logging
 import os
 from typing import Dict, List, Optional, Union
 import requests
 from ..models.result import AggregatedResult, TorrentResult
 from .search_cache import global_search_cache
+from .tmdb_client import TmdbClient
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +14,12 @@ class SearchClient:
 	"""
 	Client for querying Prowlarr indexers and aggregating torrent search results.
 	"""
-	def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None) -> None:
+
+	def __init__(self, base_url: Optional[str] = None, api_key: Optional[str] = None, tmdb_api_key: Optional[str] = None) -> None:
 		raw_url = base_url or os.environ.get("PROWLARR_URL") or "http://localhost:9696"
 		self.base_url = raw_url.rstrip("/")
 		self.api_key = api_key or os.environ.get("PROWLARR_API_KEY", "")
+		self.tmdb_api_key = tmdb_api_key or os.environ.get("TMDB_API_KEY", "")
 
 	def search(self, query: str, category: Optional[str] = None) -> List[AggregatedResult]:
 		"""
@@ -73,6 +77,11 @@ class SearchClient:
 
 			aggregated = AggregatedResult.aggregate(torrent_results)
 			logger.info("Aggregated into %d media cards.", len(aggregated))
+
+			# Concurrently resolve TMDb posters before saving into cache so cache hits include posters
+			if self.tmdb_api_key:
+				tmdb = TmdbClient(api_key=self.tmdb_api_key)
+				tmdb.resolve_posters_batch(aggregated)
 
 			global_search_cache.set(query, category, aggregated)
 

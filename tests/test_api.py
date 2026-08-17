@@ -351,6 +351,63 @@ class TestAPI(unittest.TestCase):
 			self.assertEqual(tr.clean_title, expected_clean)
 			self.assertEqual(tr.year, expected_year)
 
+	def test_library_sizes_caching_and_invalidation(self):
+		import tempfile
+		from backend.routes.api import get_library_file_sizes, invalidate_library_sizes_cache
+		
+		temp_dir = tempfile.mkdtemp(prefix="rico_test_lib_")
+		f1 = os.path.join(temp_dir, "file1.mkv")
+		with open(f1, "wb") as f:
+			f.write(b"0" * 500)
+
+		# Cold scan
+		sizes1 = get_library_file_sizes(temp_dir)
+		self.assertIn(500, sizes1)
+
+		# Add file without invalidating
+		f2 = os.path.join(temp_dir, "file2.mkv")
+		with open(f2, "wb") as f:
+			f.write(b"0" * 700)
+
+		# Should hit in-memory cache
+		sizes2 = get_library_file_sizes(temp_dir)
+		self.assertNotIn(700, sizes2)
+
+		# Invalidate and rescan
+		invalidate_library_sizes_cache(temp_dir)
+		sizes3 = get_library_file_sizes(temp_dir)
+		self.assertIn(700, sizes3)
+
+		import shutil
+		shutil.rmtree(temp_dir, ignore_errors=True)
+
+	def test_populate_all_cards_downloads_batch(self):
+		from backend.routes.api import populate_all_cards_downloads
+		
+		# Insert dummy download
+		self.db.execute(
+			"INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			(self.user.id, "tor_123", "Batch Movie", "batch.mkv", "magnet:?xt=urn:btih:batch123", "completed", "movie", 1024)
+		)
+
+		cards = [{
+			"clean_title": "Batch Movie",
+			"downloads": [
+				{"download_url": "magnet:?xt=urn:btih:batch123", "size": 1024},
+				{"download_url": "magnet:?xt=urn:btih:other999", "size": 2048}
+			]
+		}]
+
+		populate_all_cards_downloads(cards, {1024}, self.db)
+
+		self.assertTrue(cards[0]["downloads"][0]["downloaded"])
+		self.assertEqual(cards[0]["downloads"][0]["torbox_id"], "tor_123")
+		self.assertEqual(cards[0]["downloads"][0]["db_status"], "completed")
+
+		self.assertFalse(cards[0]["downloads"][1]["downloaded"])
+		self.assertIsNone(cards[0]["downloads"][1]["torbox_id"])
+
+
 if __name__ == '__main__':
 	unittest.main()
 

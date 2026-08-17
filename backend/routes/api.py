@@ -634,6 +634,7 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 						'size': total_files_size,
 						'user_id': user_id
 					})
+					invalidate_library_sizes_cache(library_root)
 					logger.info(f"Download complete: {metadata.get('filename')}")
 				else:
 					db.execute("UPDATE downloads SET status = 'failed' WHERE id = ?", (db_download_id,))
@@ -805,20 +806,79 @@ def me():
 	return jsonify(user_dict)
 
 
-def get_library_file_sizes(library_root):
-	sizes = set()
+_LIBRARY_SIZES_CACHE: Dict[str, Tuple[Set[int], float]] = {}
+_LIBRARY_SIZES_LOCK = threading.Lock()
+_LIBRARY_SIZES_TTL = 45.0  # 45 seconds TTL
+
+
+def invalidate_library_sizes_cache(library_root: Optional[str] = None) -> None:
+	"""Invalidates the in-memory library file sizes cache."""
+	with _LIBRARY_SIZES_LOCK:
+		if library_root:
+			_LIBRARY_SIZES_CACHE.pop(os.path.abspath(library_root), None)
+		else:
+			_LIBRARY_SIZES_CACHE.clear()
+
+
+def get_library_file_sizes(library_root: str) -> Set[int]:
+	"""Returns a cached set of file sizes present in the local media library root (45s TTL)."""
 	if not library_root or not os.path.exists(library_root):
-		return sizes
+		return set()
+
+	abs_root = os.path.abspath(library_root)
+	now = time.time()
+	with _LIBRARY_SIZES_LOCK:
+		if abs_root in _LIBRARY_SIZES_CACHE:
+			cached_sizes, expiry = _LIBRARY_SIZES_CACHE[abs_root]
+			if now < expiry:
+				return cached_sizes
+
+	sizes: Set[int] = set()
 	try:
-		for root, _, files in os.walk(library_root):
+		for root, _, files in os.walk(abs_root):
 			for f in files:
 				try:
 					sizes.add(os.path.getsize(os.path.join(root, f)))
-				except Exception:
+				except OSError:
 					pass
-	except Exception:
+	except OSError:
 		pass
+
+	with _LIBRARY_SIZES_LOCK:
+		_LIBRARY_SIZES_CACHE[abs_root] = (sizes, now + _LIBRARY_SIZES_TTL)
 	return sizes
+
+
+def populate_all_cards_downloads(cards: List[Dict[str, Any]], file_sizes: Set[int], db: Database) -> None:
+	"""Populates the download state for all search result cards in a single batch database query."""
+	all_magnets: List[str] = []
+	for card in cards:
+		for dl in card.get("downloads", []):
+			magnet = dl.get("download_url")
+			if magnet:
+				all_magnets.append(magnet)
+
+	dl_map: Dict[str, Any] = {}
+	if all_magnets:
+		# Batch query all magnets in one trip
+		placeholders = ",".join("?" for _ in all_magnets)
+		query_sql = f"SELECT magnet, torbox_id, user_id, status FROM downloads WHERE magnet IN ({placeholders})"
+		rows = db.query(query_sql, tuple(all_magnets)) or []
+		for r in rows:
+			dl_map[r["magnet"]] = r
+
+	for card in cards:
+		for dl in card.get("downloads", []):
+			dl["downloaded"] = dl.get("size", 0) in file_sizes
+			rec = dl_map.get(dl.get("download_url"))
+			if rec:
+				dl["torbox_id"] = rec["torbox_id"]
+				dl["user_id"] = rec["user_id"]
+				dl["db_status"] = rec["status"]
+			else:
+				dl["torbox_id"] = None
+				dl["user_id"] = None
+				dl["db_status"] = None
 
 
 # SEARCH ENDPOINT
@@ -836,33 +896,6 @@ def search():
 	settings = get_server_settings()
 	tmdb_key = settings.get("tmdb_api_key") or os.environ.get("TMDB_API_KEY", "")
 	tmdb = TmdbClient(api_key=tmdb_key)
-
-	def resolve_poster(agg):
-		if not tmdb_key:
-			return None
-		try:
-			if agg.is_tv:
-				res = tmdb.search_tv(agg.clean_title, agg.year)
-			else:
-				res = tmdb.search_movie(agg.clean_title, agg.year)
-			if res:
-				return res.get("poster_url")
-		except Exception as e:
-			logger.error(f"Failed to fetch TMDb poster for {agg.clean_title}: {e}")
-		return None
-
-	def populate_card_downloads(card, file_sizes, db):
-		for dl in card["downloads"]:
-			dl["downloaded"] = dl["size"] in file_sizes
-			row = db.query("SELECT torbox_id, user_id, status FROM downloads WHERE magnet = ?", (dl["download_url"],), one=True)
-			if row:
-				dl["torbox_id"] = row["torbox_id"]
-				dl["user_id"] = row["user_id"]
-				dl["db_status"] = row["status"]
-			else:
-				dl["torbox_id"] = None
-				dl["user_id"] = None
-				dl["db_status"] = None
 
 	# Check if the query is a magnet link or an info hash (hex or base32)
 	query_str_lower = query_str.lower()
@@ -904,39 +937,37 @@ def search():
 		)
 		agg = AggregatedResult(torrent.clean_title, torrent.year, torrent.is_tv)
 		agg.add_result(torrent)
-		agg.poster_url = resolve_poster(agg)
+		if tmdb_key:
+			tmdb.resolve_posters_batch([agg])
 
 		library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
-		library_root = os.path.abspath(library_root)
 		file_sizes = get_library_file_sizes(library_root)
 
-		card = agg.to_dict()
+		cards = [agg.to_dict()]
 		db = Database()
-		populate_card_downloads(card, file_sizes, db)
+		populate_all_cards_downloads(cards, file_sizes, db)
 
 		return jsonify({
 			"type": "search_results",
-			"data": [card]
+			"data": cards
 		})
 
 	prowlarr_url = settings.get("prowlarr_url") or os.environ.get("PROWLARR_URL", "")
 	prowlarr_key = settings.get("prowlarr_api_key") or os.environ.get("PROWLARR_API_KEY", "")
 
-	search_client = SearchClient(base_url=prowlarr_url, api_key=prowlarr_key)
+	search_client = SearchClient(base_url=prowlarr_url, api_key=prowlarr_key, tmdb_api_key=tmdb_key)
 	results = search_client.search(query, category=category)
-	for r in results:
-		r.poster_url = resolve_poster(r)
+
+	# Parallel poster resolution for any uncached cards
+	if tmdb_key:
+		tmdb.resolve_posters_batch(results)
 
 	library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
-	library_root = os.path.abspath(library_root)
 	file_sizes = get_library_file_sizes(library_root)
 
-	results_data = []
+	results_data = [r.to_dict() for r in results]
 	db = Database()
-	for r in results:
-		card = r.to_dict()
-		populate_card_downloads(card, file_sizes, db)
-		results_data.append(card)
+	populate_all_cards_downloads(results_data, file_sizes, db)
 
 	return jsonify({
 		"type": "search_results",
@@ -1248,6 +1279,8 @@ def control_torrent():
 								logger.error(f"Failed to clean up TV show folder: {ex}")
 			except Exception as e:
 				logger.error(f"Immediate cancel cleanup failed: {e}")
+			finally:
+				invalidate_library_sizes_cache(library_root)
 		else:
 			db.execute("DELETE FROM downloads WHERE torbox_id = ?", (str(torbox_id),))
 		socketio.emit('download_deleted', {'torbox_id': str(torbox_id)})
