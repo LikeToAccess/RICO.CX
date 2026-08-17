@@ -914,6 +914,13 @@ def search():
 		dn_match = re.search(r'[&?]dn=([^&]+)', magnet_url)
 		display_name = urllib.parse.unquote(dn_match.group(1).replace('+', ' ')) if dn_match else "Direct Magnet Link"
 
+		has_meaningful_dn = bool(
+			dn_match and
+			display_name not in ("Direct Magnet Link", "") and
+			not re.match(r'^[0-9a-fA-F]{40}$', display_name.strip()) and
+			not re.match(r'^[2-7a-zA-Z]{32}$', display_name.strip())
+		)
+
 		# Query Torbox for magnet metadata (like size)
 		torbox_key = settings.get("torbox_api_key") or os.environ.get("TORBOX_API_KEY", "")
 		torbox = TorboxClient(api_key=torbox_key)
@@ -922,9 +929,19 @@ def search():
 		size = 0
 		if magnet_info and isinstance(magnet_info, dict):
 			if magnet_info.get("size"):
-				size = int(magnet_info["size"])
-			if magnet_info.get("name") and magnet_info["name"] != "Direct Magnet Link":
-				display_name = magnet_info["name"]
+				try:
+					size = int(magnet_info["size"])
+				except (ValueError, TypeError):
+					size = 0
+			torbox_name = (magnet_info.get("name") or "").strip()
+			is_torbox_name_hash = bool(
+				re.match(r'^[0-9a-fA-F]{40}$', torbox_name) or
+				re.match(r'^[2-7a-zA-Z]{32}$', torbox_name)
+			)
+			if torbox_name and torbox_name != "Direct Magnet Link" and not is_torbox_name_hash:
+				display_name = torbox_name
+			elif not has_meaningful_dn and torbox_name:
+				display_name = torbox_name
 
 		# Build a synthetic TorrentResult and AggregatedResult
 		torrent = TorrentResult(

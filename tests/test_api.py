@@ -116,6 +116,40 @@ class TestAPI(unittest.TestCase):
 		self.assertEqual(data['data'][0]['downloads'][0]['title'], 'Avatar 2009 Special Edition')
 		self.assertEqual(data['data'][0]['size_range'], '4.5 GB')
 
+	@patch('requests.get')
+	def test_search_magnet_with_torbox_hash_name_fallback(self, mock_get):
+		# When Torbox checkcached returns the raw hash as the name, the dn= title must be preserved
+		self.db.execute("INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)", ("torbox_api_key", "dummy_torbox_key"))
+
+		mock_resp = MagicMock()
+		mock_resp.status_code = 200
+		mock_resp.json.return_value = {
+			"success": True,
+			"data": {
+				"fddd40b43bf276f03ba25fe12a35510486945aae": {
+					"name": "fddd40b43bf276f03ba25fe12a35510486945aae",
+					"size": 13544724221,
+					"hash": "fddd40b43bf276f03ba25fe12a35510486945aae"
+				}
+			}
+		}
+		mock_get.return_value = mock_resp
+
+		magnet = "magnet:?xt=urn:btih:FDDD40B43BF276F03BA25FE12A35510486945AAE&dn=Pantheon+%3A+Season+01+S01+%5B2022%5D+1080p+AMZN+WebRip+x265+DDP+5.1+Kira+%5BSEV%5D&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337"
+		import urllib.parse
+		response = self.client.get(f'/api/search?q={urllib.parse.quote(magnet)}')
+		data = json.loads(response.data)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(data['type'], 'search_results')
+		self.assertEqual(len(data['data']), 1)
+		card = data['data'][0]
+		self.assertEqual(card['clean_title'], "Pantheon")
+		self.assertEqual(card['year'], 2022)
+		self.assertTrue(card['is_tv'])
+		self.assertEqual(card['downloads'][0]['season'], 1)
+		self.assertEqual(card['downloads'][0]['size'], 13544724221)
+
 	def test_user_settings(self):
 		# Change user to Admin to allow settings access
 		self.user.group_id = 1
