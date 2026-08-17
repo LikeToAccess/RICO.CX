@@ -2,6 +2,16 @@ import { io } from "/socket.io.esm.min.js";
 
 const FALLBACK_AVATAR = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2364748b'><circle cx='12' cy='12' r='12' fill='%231e293b'/><path d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z' fill='%2394a3b8'/></svg>";
 
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // Safe localStorage wrapper
 const safeStorage = {
   getItem(key) {
@@ -651,7 +661,7 @@ function renderSearchResults() {
       const marker = dl.downloaded ? " [ALREADY DOWNLOADED]" : "";
       optionsHtml += `
         <option value="${dlIdx}">
-          [${displaySize} | Seeds: ${dl.seeders}]${marker} - ${dl.title}
+          [${displaySize} | Seeds: ${escapeHtml(dl.seeders)}]${marker} - ${escapeHtml(dl.title)}
         </option>
       `;
     });
@@ -662,7 +672,7 @@ function renderSearchResults() {
     
     // Poster representation
     const posterHtml = item.poster_url 
-      ? `<img src="${item.poster_url}" alt="Poster" style="width: 100%; height: 100%; object-fit: cover;">`
+      ? `<img src="${escapeHtml(item.poster_url)}" alt="Poster" style="width: 100%; height: 100%; object-fit: cover;">`
       : `<span>${isTV ? 'TV' : 'FILM'}</span>`;
       
     // Compute current size range for the filtered downloads list
@@ -678,11 +688,11 @@ function renderSearchResults() {
         </div>
         <div class="media-card-info">
           <div class="media-title-line">
-            <span>${item.clean_title} ${yearText}</span>
+            <span>${escapeHtml(item.clean_title)} ${escapeHtml(yearText)}</span>
             ${categoryBadge}
           </div>
           <div class="media-meta-line">
-            <span>Size Range: <strong>${sizeRangeText}</strong></span>
+            <span>Size Range: <strong>${escapeHtml(sizeRangeText)}</strong></span>
             <span>Releases: <strong>${downloads.length}</strong></span>
           </div>
           <div class="media-tags" id="card-tags-${index}">
@@ -709,22 +719,22 @@ function renderSearchResults() {
       tagsContainer.innerHTML = "";
       
       if (dlOption.resolution !== "Unknown") {
-        tagsContainer.innerHTML += `<span class="tag-badge">${dlOption.resolution}</span>`;
+        tagsContainer.innerHTML += `<span class="tag-badge">${escapeHtml(dlOption.resolution)}</span>`;
       }
       dlOption.features.forEach(feat => {
-        tagsContainer.innerHTML += `<span class="tag-badge">${feat}</span>`;
+        tagsContainer.innerHTML += `<span class="tag-badge">${escapeHtml(feat)}</span>`;
       });
       if (dlOption.source !== "Unknown") {
-        tagsContainer.innerHTML += `<span class="tag-badge">${dlOption.source}</span>`;
+        tagsContainer.innerHTML += `<span class="tag-badge">${escapeHtml(dlOption.source)}</span>`;
       }
       if (dlOption.codec !== "Unknown") {
-        tagsContainer.innerHTML += `<span class="tag-badge">${dlOption.codec}</span>`;
+        tagsContainer.innerHTML += `<span class="tag-badge">${escapeHtml(dlOption.codec)}</span>`;
       }
       dlOption.audio.forEach(aud => {
-        tagsContainer.innerHTML += `<span class="tag-badge">${aud}</span>`;
+        tagsContainer.innerHTML += `<span class="tag-badge">${escapeHtml(aud)}</span>`;
       });
       
-      tagsContainer.innerHTML += `<span class="tag-badge" style="border-style: solid; opacity: 0.6;">${dlOption.indexer}</span>`;
+      tagsContainer.innerHTML += `<span class="tag-badge" style="border-style: solid; opacity: 0.6;">${escapeHtml(dlOption.indexer)}</span>`;
       
       // Update download button state
       const activeDl = state.downloads.find(d => d.magnet === dlOption.download_url);
@@ -875,8 +885,8 @@ function renderDownloadItem(dl) {
     cancelBtnHtml = `<button class="btn btn-danger btn-cancel-dl" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.6rem; font-family: var(--font-mono); height: 18px; line-height: 1; border-radius: 0; margin-top: 4px;">CANCEL</button>`;
   }
   
-  const displayTitle = dl.title || dl.filename || "Unknown Torrent";
-  const displaySubtitle = (dl.filename && dl.filename !== dl.title) ? dl.filename : "";
+  const displayTitle = escapeHtml(dl.title || dl.filename || "Unknown Torrent");
+  const displaySubtitle = escapeHtml((dl.filename && dl.filename !== dl.title) ? dl.filename : "");
   
   return `
       <div class="dl-item-header">
@@ -885,7 +895,7 @@ function renderDownloadItem(dl) {
           ${displaySubtitle ? `<div class="dl-item-subtitle" title="${displaySubtitle}">${displaySubtitle}</div>` : ""}
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 0.25rem; flex-shrink: 0;">
-          <span class="dl-item-status dl-status-${statusClass}">${dl.status}</span>
+          <span class="dl-item-status dl-status-${statusClass}">${escapeHtml(dl.status)}</span>
           <div style="display: flex; gap: 2px;">
             ${resumeBtnHtml}
             ${cancelBtnHtml}
@@ -1787,10 +1797,10 @@ function renderAdminUsersList(users) {
     return `
       <tr style="border-bottom: 1px solid var(--border-color);">
         <td style="padding: 0.75rem 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-          <img src="${u.profile_picture || FALLBACK_AVATAR}" style="width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-color);">
+          <img src="${escapeHtml(u.profile_picture || FALLBACK_AVATAR)}" style="width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-color);">
           <div style="display: flex; flex-direction: column;">
-            <strong style="color: var(--text-primary); font-size: 0.8rem;">${u.full_name || u.username}</strong>
-            <span style="font-size: 0.65rem; color: var(--text-muted);">${u.username}</span>
+            <strong style="color: var(--text-primary); font-size: 0.8rem;">${escapeHtml(u.full_name || u.username)}</strong>
+            <span style="font-size: 0.65rem; color: var(--text-muted);">${escapeHtml(u.username)}</span>
           </div>
         </td>
         <td style="padding: 0.75rem 0.5rem; color: var(--text-secondary); vertical-align: middle;">${joinDate}</td>
@@ -1833,7 +1843,7 @@ async function fetchAdminDownloads() {
       renderAdminDownloadsList(downloads);
     } else {
       const err = await resp.json();
-      container.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Failed to load downloads: ${err.error}</td></tr>`;
+      container.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Failed to load downloads: ${escapeHtml(err.error)}</td></tr>`;
     }
   } catch (e) {
     console.error(e);
@@ -1884,18 +1894,18 @@ function renderAdminDownloadsList(downloads) {
     return `
       <tr id="admin-dl-row-${dl.torbox_id}" style="border-bottom: 1px solid var(--border-color);">
         <td style="padding: 0.75rem 0.5rem; max-width: 320px; word-break: break-all;">
-          <strong style="color: var(--text-primary); font-size: 0.80rem;">${dl.title || dl.filename || "Unknown Title"}</strong><br>
-          <span style="font-size: 0.65rem; color: var(--text-muted);">${dl.filename || ""}</span><br>
+          <strong style="color: var(--text-primary); font-size: 0.80rem;">${escapeHtml(dl.title || dl.filename || "Unknown Title")}</strong><br>
+          <span style="font-size: 0.65rem; color: var(--text-muted);">${escapeHtml(dl.filename || "")}</span><br>
           <span style="font-size: 0.65rem; color: var(--text-muted);">${dateText}</span>
         </td>
         <td style="padding: 0.75rem 0.5rem; color: var(--text-secondary); vertical-align: middle;">
-          <strong>${dl.full_name}</strong><br>
-          <span style="font-size: 0.65rem; color: var(--text-muted);">${dl.username}</span>
+          <strong>${escapeHtml(dl.full_name)}</strong><br>
+          <span style="font-size: 0.65rem; color: var(--text-muted);">${escapeHtml(dl.username)}</span>
         </td>
         <td id="admin-dl-size-${dl.torbox_id}" style="padding: 0.75rem 0.5rem; color: var(--text-secondary); vertical-align: middle;">${sizeText}</td>
         <td style="padding: 0.75rem 0.5rem; vertical-align: middle;">
           <span id="admin-dl-status-${dl.torbox_id}" class="dl-item-status dl-status-${statusClass}" style="padding: 0.1rem 0.3rem; border: 1px solid var(--border-color); font-size: 0.65rem; display: inline-block;">
-            ${dl.status.toUpperCase()} (${progressText})
+            ${escapeHtml(dl.status.toUpperCase())} (${escapeHtml(progressText)})
           </span>
         </td>
         <td id="admin-dl-btn-${dl.torbox_id}" style="padding: 0.75rem 0.5rem; text-align: right; vertical-align: middle;">

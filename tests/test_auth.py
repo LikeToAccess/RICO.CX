@@ -136,7 +136,8 @@ class TestAuth(unittest.TestCase):
 		}
 		mock_get.return_value = mock_userinfo_resp
 		
-		response = self.client.get('/api/auth/google/callback?code=mock_code')
+		self.client.set_cookie('oauth_state', 'mock_state_123')
+		response = self.client.get('/api/auth/google/callback?code=mock_code&state=mock_state_123')
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response.headers['Location'], '/')
 		
@@ -185,7 +186,8 @@ class TestAuth(unittest.TestCase):
 		}
 		mock_get.return_value = mock_userinfo_resp
 		
-		response = self.client.get('/api/auth/google/callback?code=mock_code')
+		self.client.set_cookie('oauth_state', 'mock_state_123')
+		response = self.client.get('/api/auth/google/callback?code=mock_code&state=mock_state_123')
 		self.assertEqual(response.status_code, 302)
 		
 		# User details should be updated

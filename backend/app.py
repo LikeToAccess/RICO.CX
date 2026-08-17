@@ -35,7 +35,8 @@ def create_app() -> Flask:
 
 	CORS(app, supports_credentials=True)
 
-	app.secret_key = os.environ.get("FLASK_SECRET_KEY", "rico_cx_secret_key_129837")
+	import secrets
+	app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
 	Database()
 
@@ -51,8 +52,10 @@ def create_app() -> Flask:
 	def block_sensitive_files() -> Optional[Any]:
 		req_path = request.path.lower()
 		filename = os.path.basename(req_path)
+		path_parts = [p for p in req_path.split('/') if p]
 		sensitive_exts = ['.env', '.db', '.sqlite', '.py', '.sql', '.sh', '.bak', '.log', '.err', '.md', '.yml', '.yaml']
-		if filename.startswith('.') or any(req_path.endswith(ext) for ext in sensitive_exts):
+		sensitive_names = {'requirements.txt', 'package.json', 'package-lock.json', 'dockerfile', 'schema.sql'}
+		if any(part.startswith('.') for part in path_parts) or filename in sensitive_names or any(req_path.endswith(ext) for ext in sensitive_exts):
 			return jsonify({"error": "Access denied"}), 403
 		return None
 
@@ -67,13 +70,16 @@ def create_app() -> Flask:
 		if not app.static_folder:
 			return jsonify({"error": "Static folder not set"}), 500
 
-		filename = os.path.basename(path)
+		filename = os.path.basename(path).lower()
+		path_parts = [p for p in path.lower().split('/') if p]
 		sensitive_exts = ['.env', '.db', '.sqlite', '.py', '.sql', '.sh', '.bak', '.log', '.err', '.md', '.yml', '.yaml']
-		if filename.startswith('.') or any(path.lower().endswith(ext) for ext in sensitive_exts):
+		sensitive_names = {'requirements.txt', 'package.json', 'package-lock.json', 'dockerfile', 'schema.sql'}
+		if any(part.startswith('.') for part in path_parts) or filename in sensitive_names or any(path.lower().endswith(ext) for ext in sensitive_exts):
 			return jsonify({"error": "Access denied"}), 403
 
 		safe_path = os.path.abspath(os.path.join(app.static_folder, path))
-		if not safe_path.startswith(os.path.abspath(app.static_folder)):
+		static_abs = os.path.abspath(app.static_folder)
+		if os.path.commonpath([static_abs, safe_path]) != static_abs:
 			return jsonify({"error": "Access denied"}), 403
 
 		if path != "" and os.path.exists(safe_path) and os.path.isfile(safe_path):

@@ -1,5 +1,8 @@
 # Sensitive data
 .env
+*.pem
+cert.pem
+key.pem
 
 # Temp
 temp/

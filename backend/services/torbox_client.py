@@ -47,23 +47,17 @@ class TorboxClient:
 
 		if is_url:
 			try:
+				from urllib.parse import urlparse
 				from ..database import Database  # pylint: disable=import-outside-toplevel
 				logger.info("Detected HTTP/HTTPS torrent URL: %s. Downloading torrent file...", magnet_link)
 
-				headers = {
-					"User-Agent": (
-						"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-						"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-					)
-				}
-				try:
-					db = Database()
-					row = db.query("SELECT value FROM server_settings WHERE key = 'prowlarr_api_key'", one=True)
-					prowlarr_key = row[0] if row else None
-					if prowlarr_key:
-						headers["X-Api-Key"] = prowlarr_key
-				except Exception as db_err:  # pylint: disable=broad-exception-caught
-					logger.debug("Could not load Prowlarr key from database: %s", db_err)
+				db = Database()
+				prowlarr_row = db.query("SELECT value FROM server_settings WHERE key = 'prowlarr_url'", one=True)
+				prowlarr_url_val = prowlarr_row[0] if prowlarr_row else os.environ.get("PROWLARR_URL", "")
+				prowlarr_host = urlparse(prowlarr_url_val).netloc if prowlarr_url_val else ""
+
+				key_row = db.query("SELECT value FROM server_settings WHERE key = 'prowlarr_api_key'", one=True)
+				prowlarr_key = key_row[0] if key_row else os.environ.get("PROWLARR_API_KEY", "")
 
 				current_url = magnet_link
 				redirect_count = 0
@@ -71,6 +65,16 @@ class TorboxClient:
 				resp: Optional[requests.Response] = None
 
 				while redirect_count < max_redirects:
+					headers = {
+						"User-Agent": (
+							"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+							"AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+						)
+					}
+					target_host = urlparse(current_url).netloc
+					if prowlarr_key and prowlarr_host and target_host == prowlarr_host:
+						headers["X-Api-Key"] = prowlarr_key
+
 					resp = requests.get(current_url, headers=headers, timeout=15, allow_redirects=False)
 					if resp.status_code in (301, 302, 303, 307, 308):
 						location = resp.headers.get("Location")

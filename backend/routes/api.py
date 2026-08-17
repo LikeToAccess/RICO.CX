@@ -1,11 +1,14 @@
-import re
-import os
-import time
 import logging
-import requests
+import os
+import re
+import secrets
 import shutil
+import threading
+import time
 from collections import deque
 from functools import wraps
+from typing import Any, Dict, List, Optional, Set, Tuple
+import requests
 from flask import Blueprint, request, jsonify, g, redirect
 from ..models.user import User
 from ..models.result import TorrentResult, AggregatedResult
@@ -17,6 +20,11 @@ from ..app import socketio
 
 logger = logging.getLogger(__name__)
 api_bp = Blueprint('api', __name__)
+
+ACTIVE_DOWNLOAD_TASKS: Set[Tuple[int, str]] = set()
+ACTIVE_TASKS_LOCK = threading.Lock()
+_RESUMPTION_INITIALIZED = False
+_RESUMPTION_LOCK = threading.Lock()
 
 def get_server_settings():
 	db = Database()
@@ -62,13 +70,6 @@ def login_required(f):
 
 		return f(*args, **kwargs)
 	return decorated_function
-
-import threading
-
-ACTIVE_DOWNLOAD_TASKS = set()
-ACTIVE_TASKS_LOCK = threading.Lock()
-_RESUMPTION_INITIALIZED = False
-_RESUMPTION_LOCK = threading.Lock()
 
 # Background Task for Torbox Lifecycle Monitoring & Downloader
 def monitor_and_download_task(user_id, torbox_id, metadata, db_download_id):
@@ -662,21 +663,34 @@ def google_login():
 	if not client_id:
 		return jsonify({"error": "Google Client ID is not configured on the server."}), 500
 
+	import secrets
+	state = secrets.token_urlsafe(32)
+
 	redirect_uri = f"{request.host_url.rstrip('/')}/api/auth/google/callback"
 	google_auth_url = (
 		f"https://accounts.google.com/o/oauth2/v2/auth?"
 		f"client_id={client_id}&"
 		f"redirect_uri={redirect_uri}&"
 		f"response_type=code&"
-		f"scope=openid%20email%20profile"
+		f"scope=openid%20email%20profile&"
+		f"state={state}"
 	)
-	return redirect(google_auth_url)
+	is_secure = (os.environ.get("USE_SSL", "false").lower() == "true" or request.is_secure or request.headers.get("X-Forwarded-Proto") == "https")
+	response = redirect(google_auth_url)
+	response.set_cookie("oauth_state", state, max_age=600, httponly=True, samesite='Lax', secure=is_secure)
+	return response
 
 @api_bp.route('/auth/google/callback', methods=['GET'])
 def google_callback():
 	code = request.args.get("code")
+	state = request.args.get("state")
+	cookie_state = request.cookies.get("oauth_state")
+
 	if not code:
 		return jsonify({"error": "Missing authorization code from Google"}), 400
+
+	if not state or not cookie_state or state != cookie_state:
+		return jsonify({"error": "Invalid or expired OAuth state parameter"}), 400
 
 	client_id = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 	client_secret = os.environ.get("GOOGLE_CLIENT_SECRET", "").strip()
@@ -758,8 +772,10 @@ def google_callback():
 
 	token = User.create_session(user.id)
 
+	is_secure = (os.environ.get("USE_SSL", "false").lower() == "true" or request.is_secure or request.headers.get("X-Forwarded-Proto") == "https")
 	response = redirect("/")
-	response.set_cookie("session_token", token, max_age=30*24*60*60, httponly=True, samesite='Lax')
+	response.set_cookie("session_token", token, max_age=30*24*60*60, httponly=True, samesite='Lax', secure=is_secure)
+	response.delete_cookie("oauth_state")
 	return response
 
 @api_bp.route('/auth/login', methods=['POST'])
