@@ -1570,6 +1570,126 @@ def admin_delete_user():
 	return jsonify({"success": True, "message": "User deleted successfully."})
 
 
+def format_byte_size(size_bytes: int) -> str:
+	"""Helper function to format byte numbers into human-readable strings."""
+	if size_bytes <= 0:
+		return "0 B"
+	units = ["B", "KB", "MB", "GB", "TB", "PB"]
+	i = 0
+	val = float(size_bytes)
+	while val >= 1024.0 and i < len(units) - 1:
+		val /= 1024.0
+		i += 1
+	return f"{val:.1f} {units[i]}"
+
+
+# ADMIN: SYSTEM STATS & METRICS
+@api_bp.route('/admin/stats', methods=['GET'])
+@login_required
+def admin_stats():
+	is_admin_or_mod = g.user.group and g.user.group.name in ("Admin", "Moderator")
+	if not is_admin_or_mod:
+		return jsonify({"error": "Forbidden"}), 403
+
+	db = Database()
+	db_path = db.db_path
+	db_size = os.path.getsize(db_path) if os.path.exists(db_path) else 0
+	wal_path = f"{db_path}-wal"
+	wal_size = os.path.getsize(wal_path) if os.path.exists(wal_path) else 0
+
+	# Get SQLite journal mode
+	journal_mode_row = db.query("PRAGMA journal_mode", one=True)
+	journal_mode = journal_mode_row[0] if journal_mode_row else "unknown"
+
+	# User stats
+	user_counts = db.query("""
+		SELECT 
+			COUNT(*) as total,
+			SUM(CASE WHEN group_id IS NOT NULL THEN 1 ELSE 0 END) as approved,
+			SUM(CASE WHEN group_id IS NULL THEN 1 ELSE 0 END) as pending
+		FROM users
+	""", one=True)
+
+	total_users = user_counts["total"] if user_counts else 0
+	approved_users = user_counts["approved"] or 0 if user_counts else 0
+	pending_users = user_counts["pending"] or 0 if user_counts else 0
+
+	# Download stats
+	dl_stats = db.query("""
+		SELECT 
+			COUNT(*) as total,
+			SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+			SUM(CASE WHEN status IN ('downloading', 'queued') OR status LIKE 'Moving%' THEN 1 ELSE 0 END) as active,
+			SUM(CASE WHEN status IN ('failed', 'error') THEN 1 ELSE 0 END) as failed,
+			SUM(CASE WHEN status = 'completed' THEN size ELSE 0 END) as total_downloaded_bytes
+		FROM downloads
+	""", one=True)
+
+	total_dls = dl_stats["total"] if dl_stats else 0
+	completed_dls = dl_stats["completed"] or 0 if dl_stats else 0
+	active_dls = dl_stats["active"] or 0 if dl_stats else 0
+	failed_dls = dl_stats["failed"] or 0 if dl_stats else 0
+	total_downloaded_bytes = dl_stats["total_downloaded_bytes"] or 0 if dl_stats else 0
+
+	# Storage stats on library path
+	settings = get_server_settings()
+	library_path = settings.get("library_path") or os.environ.get("LIBRARY_PATH", "/mnt/PLEX")
+	storage_info = {
+		"library_path": library_path,
+		"total_bytes": 0,
+		"used_bytes": 0,
+		"free_bytes": 0,
+		"usage_percent": 0.0,
+		"total_formatted": "N/A",
+		"used_formatted": "N/A",
+		"free_formatted": "N/A"
+	}
+	if os.path.exists(library_path):
+		try:
+			usage = shutil.disk_usage(library_path)
+			storage_info["total_bytes"] = usage.total
+			storage_info["used_bytes"] = usage.used
+			storage_info["free_bytes"] = usage.free
+			storage_info["usage_percent"] = round((usage.used / usage.total) * 100, 1) if usage.total > 0 else 0.0
+			storage_info["total_formatted"] = format_byte_size(usage.total)
+			storage_info["used_formatted"] = format_byte_size(usage.used)
+			storage_info["free_formatted"] = format_byte_size(usage.free)
+		except Exception as exc:  # pylint: disable=broad-exception-caught
+			logger.debug("Failed to get library disk usage: %s", exc)
+
+	import sys
+	return jsonify({
+		"database": {
+			"path": db_path,
+			"size_bytes": db_size,
+			"size_formatted": format_byte_size(db_size),
+			"wal_size_bytes": wal_size,
+			"wal_size_formatted": format_byte_size(wal_size),
+			"journal_mode": str(journal_mode).upper()
+		},
+		"storage": storage_info,
+		"downloads": {
+			"total_count": total_dls,
+			"completed_count": completed_dls,
+			"active_count": active_dls,
+			"failed_count": failed_dls,
+			"total_downloaded_bytes": total_downloaded_bytes,
+			"total_downloaded_formatted": format_byte_size(total_downloaded_bytes)
+		},
+		"users": {
+			"total_count": total_users,
+			"approved_count": approved_users,
+			"pending_count": pending_users
+		},
+		"server": {
+			"service": "RICO.CX",
+			"status": "healthy",
+			"python_version": sys.version.split()[0],
+			"timestamp": time.time()
+		}
+	})
+
+
 def start_bg_task(target, *args, **kwargs):
 	if getattr(socketio, 'server', None) is not None:
 		socketio.start_background_task(target, *args, **kwargs)

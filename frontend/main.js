@@ -1358,8 +1358,8 @@ function renderAdminContent() {
   let tabsHtml = "";
   if (isAdmin) {
     tabsHtml = `
-      <button id="tab-admin-users" class="${usersTabClass}" style="flex: 1; border-radius: 0;">Users Directory</button>
       <button id="tab-admin-downloads" class="${downloadsTabClass}" style="flex: 1; border-radius: 0;">All Downloads</button>
+      <button id="tab-admin-users" class="${usersTabClass}" style="flex: 1; border-radius: 0;">Users Directory</button>
       <button id="tab-admin-settings" class="${settingsTabClass}" style="flex: 1; border-radius: 0;">Server Settings</button>
     `;
   } else if (isMod) {
@@ -1374,38 +1374,53 @@ function renderAdminContent() {
 
   return `
     <div class="settings-box animate-slide">
-      <h2>ADMINISTRATION PANEL</h2>
-      <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Manage users, view system downloads, and configure server settings.</p>
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
+        <div>
+          <h2>ADMINISTRATION PANEL</h2>
+          <p style="color: var(--text-secondary); margin-bottom: 0;">System telemetry, user management, and server orchestration.</p>
+        </div>
+        <button id="btn-refresh-admin-all" class="btn" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 0;">🔄 Refresh Overview</button>
+      </div>
+
+      <!-- Real-time KPI Stats Grid -->
+      <div id="admin-stats-grid" class="admin-stats-grid">
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span>Database Size</span>
+            <span class="admin-stat-icon">💾</span>
+          </div>
+          <div id="stat-db-size" class="admin-stat-value">Loading...</div>
+          <div id="stat-db-sub" class="admin-stat-sub">SQLite (WAL Mode)</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span>Library Storage</span>
+            <span class="admin-stat-icon">🗄️</span>
+          </div>
+          <div id="stat-storage-size" class="admin-stat-value">Loading...</div>
+          <div id="stat-storage-sub" class="admin-stat-sub">Library Mount</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span>Total Downloads</span>
+            <span class="admin-stat-icon">📥</span>
+          </div>
+          <div id="stat-dl-count" class="admin-stat-value">Loading...</div>
+          <div id="stat-dl-sub" class="admin-stat-sub">Tracked Releases</div>
+        </div>
+        <div class="admin-stat-card">
+          <div class="admin-stat-header">
+            <span>User Accounts</span>
+            <span class="admin-stat-icon">👥</span>
+          </div>
+          <div id="stat-user-count" class="admin-stat-value">Loading...</div>
+          <div id="stat-user-sub" class="admin-stat-sub">System Users</div>
+        </div>
+      </div>
       
       <!-- Admin Tab Headers -->
       <div style="display: flex; gap: 0.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.5rem;">
         ${tabsHtml}
-      </div>
-
-      <!-- Tab Content: Users -->
-      <div id="admin-users-section" style="display: ${showUsersDisplay};">
-        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">User Accounts & Approvals</h3>
-          <button id="btn-refresh-users" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 0;">Refresh</button>
-        </div>
-        <div id="admin-users-table-container" style="overflow-x: auto; border: 1px solid var(--border-color); background-color: var(--bg-secondary); padding: 0.5rem;">
-          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.8rem; font-family: var(--font-mono);">
-            <thead>
-              <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-transform: uppercase; font-size: 0.7rem;">
-                <th style="padding: 0.75rem 0.5rem;">User</th>
-                <th style="padding: 0.75rem 0.5rem;">Joined</th>
-                <th style="padding: 0.75rem 0.5rem;">Role / Group</th>
-                <th style="padding: 0.75rem 0.5rem; text-align: right;">Stats</th>
-                <th style="padding: 0.75rem 0.5rem; text-align: right;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="admin-users-list">
-              <tr>
-                <td colspan="5" class="empty-state" style="padding: 2rem;">Loading users...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </div>
 
       <!-- Tab Content: Downloads -->
@@ -1413,17 +1428,16 @@ function renderAdminContent() {
         <!-- Filters & Searches -->
         <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color); padding: 1rem; background-color: var(--bg-primary);">
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-            <input type="text" id="admin-search-dl" class="form-input" placeholder="Search by title..." style="flex: 2; min-width: 180px;">
+            <input type="text" id="admin-search-dl" class="form-input" placeholder="Search title or filename..." style="flex: 2; min-width: 180px;">
             <select id="admin-filter-status" class="form-input" style="flex: 1; min-width: 120px;">
               <option value="">All Statuses</option>
               <option value="queued">Queued</option>
-              <option value="downloading">Downloading</option>
-              <option value="moving">Moving</option>
+              <option value="downloading">Downloading / Moving</option>
               <option value="completed">Completed</option>
               <option value="failed">Failed</option>
             </select>
             <select id="admin-sort-by" class="form-input" style="flex: 1; min-width: 120px;">
-              <option value="created_at">Date Created</option>
+              <option value="created_at">Date / Time Added</option>
               <option value="size">File Size</option>
               <option value="status">Status</option>
               <option value="username">User</option>
@@ -1444,24 +1458,61 @@ function renderAdminContent() {
           <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">System Torrent Queue</h3>
           <button id="btn-refresh-downloads" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 0;">Refresh</button>
         </div>
-        <div id="admin-downloads-table-container" style="overflow-x: auto; border: 1px solid var(--border-color); background-color: var(--bg-secondary); padding: 0.5rem;">
-          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.8rem; font-family: var(--font-mono);">
+
+        <!-- Desktop Downloads Table -->
+        <div id="admin-downloads-table-container" class="admin-table-container" style="overflow-x: auto; border: 1px solid var(--border-color); background-color: var(--bg-secondary); padding: 0.5rem;">
+          <table class="admin-table">
             <thead>
-              <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-transform: uppercase; font-size: 0.7rem;">
-                <th style="padding: 0.75rem 0.5rem;">Torrent</th>
+              <tr>
+                <th style="padding: 0.75rem 0.5rem;">Torrent / Release</th>
+                <th style="padding: 0.75rem 0.5rem;">Date & Time Added</th>
                 <th style="padding: 0.75rem 0.5rem;">User</th>
                 <th style="padding: 0.75rem 0.5rem;">Size</th>
-                <th style="padding: 0.75rem 0.5rem;">Status</th>
+                <th style="padding: 0.75rem 0.5rem;">Status & Progress</th>
                 <th style="padding: 0.75rem 0.5rem; text-align: right;">Action</th>
               </tr>
             </thead>
             <tbody id="admin-downloads-list">
               <tr>
-                <td colspan="5" class="empty-state" style="padding: 2rem;">Loading downloads...</td>
+                <td colspan="6" class="empty-state" style="padding: 2rem;">Loading downloads...</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <!-- Mobile Downloads Card View -->
+        <div id="admin-downloads-cards-mobile" class="admin-mobile-cards"></div>
+      </div>
+
+      <!-- Tab Content: Users -->
+      <div id="admin-users-section" style="display: ${showUsersDisplay};">
+        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
+          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">User Accounts & Approvals</h3>
+          <button id="btn-refresh-users" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 0;">Refresh</button>
+        </div>
+
+        <!-- Desktop Users Table -->
+        <div id="admin-users-table-container" class="admin-table-container" style="overflow-x: auto; border: 1px solid var(--border-color); background-color: var(--bg-secondary); padding: 0.5rem;">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th style="padding: 0.75rem 0.5rem;">User</th>
+                <th style="padding: 0.75rem 0.5rem;">Joined Date</th>
+                <th style="padding: 0.75rem 0.5rem;">Role / Group</th>
+                <th style="padding: 0.75rem 0.5rem; text-align: right;">Downloads</th>
+                <th style="padding: 0.75rem 0.5rem; text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-list">
+              <tr>
+                <td colspan="5" class="empty-state" style="padding: 2rem;">Loading users...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Mobile Users Card View -->
+        <div id="admin-users-cards-mobile" class="admin-mobile-cards"></div>
       </div>
 
       <!-- Tab Content: Server Settings -->
@@ -1501,6 +1552,62 @@ function renderAdminContent() {
       </div>
     </div>
   `;
+}
+
+async function fetchAdminStats() {
+  const dbSizeEl = document.getElementById("stat-db-size");
+  const dbSubEl = document.getElementById("stat-db-sub");
+  const storageSizeEl = document.getElementById("stat-storage-size");
+  const storageSubEl = document.getElementById("stat-storage-sub");
+  const dlCountEl = document.getElementById("stat-dl-count");
+  const dlSubEl = document.getElementById("stat-dl-sub");
+  const userCountEl = document.getElementById("stat-user-count");
+  const userSubEl = document.getElementById("stat-user-sub");
+
+  if (!dbSizeEl) return;
+
+  try {
+    const headers = {};
+    if (state.token) {
+      headers["Authorization"] = `Bearer ${state.token}`;
+    }
+    const resp = await fetch("/api/admin/stats", { headers });
+    if (resp.ok) {
+      const stats = await resp.json();
+      
+      // Database
+      if (stats.database) {
+        dbSizeEl.textContent = stats.database.size_formatted || "0 B";
+        const walInfo = stats.database.wal_size_bytes > 0 ? ` (WAL: ${stats.database.wal_size_formatted})` : "";
+        dbSubEl.textContent = `SQLite [${stats.database.journal_mode || 'WAL'}]${walInfo}`;
+      }
+
+      // Storage
+      if (stats.storage) {
+        if (stats.storage.total_bytes > 0) {
+          storageSizeEl.textContent = stats.storage.used_formatted || "0 B";
+          storageSubEl.textContent = `${stats.storage.free_formatted} Free of ${stats.storage.total_formatted} (${stats.storage.usage_percent}% Used)`;
+        } else {
+          storageSizeEl.textContent = "Mounted";
+          storageSubEl.textContent = stats.storage.library_path || "Library Mount";
+        }
+      }
+
+      // Downloads
+      if (stats.downloads) {
+        dlCountEl.textContent = `${stats.downloads.total_count}`;
+        dlSubEl.textContent = `${stats.downloads.completed_count} Done • ${stats.downloads.active_count} Active (${stats.downloads.total_downloaded_formatted})`;
+      }
+
+      // Users
+      if (stats.users) {
+        userCountEl.textContent = `${stats.users.total_count}`;
+        userSubEl.textContent = `${stats.users.approved_count} Approved • ${stats.users.pending_count} Pending`;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch admin stats:", err);
+  }
 }
 
 async function fetchServerSettings() {
@@ -1552,6 +1659,7 @@ function setupAdminContentListeners() {
       
       state.adminActiveTab = "users";
       fetchAdminUsers();
+      fetchAdminStats();
     });
   }
   
@@ -1567,6 +1675,7 @@ function setupAdminContentListeners() {
       
       state.adminActiveTab = "downloads";
       fetchAdminDownloads();
+      fetchAdminStats();
     });
   }
   
@@ -1582,17 +1691,34 @@ function setupAdminContentListeners() {
       
       state.adminActiveTab = "settings";
       fetchServerSettings();
+      fetchAdminStats();
+    });
+  }
+
+  const refreshOverviewBtn = document.getElementById("btn-refresh-admin-all");
+  if (refreshOverviewBtn) {
+    refreshOverviewBtn.addEventListener("click", () => {
+      fetchAdminStats();
+      if (state.adminActiveTab === "users") fetchAdminUsers();
+      else if (state.adminActiveTab === "downloads") fetchAdminDownloads();
+      else if (state.adminActiveTab === "settings") fetchServerSettings();
     });
   }
   
   const refreshUsersBtn = document.getElementById("btn-refresh-users");
   if (refreshUsersBtn) {
-    refreshUsersBtn.addEventListener("click", fetchAdminUsers);
+    refreshUsersBtn.addEventListener("click", () => {
+      fetchAdminUsers();
+      fetchAdminStats();
+    });
   }
   
   const refreshDownloadsBtn = document.getElementById("btn-refresh-downloads");
   if (refreshDownloadsBtn) {
-    refreshDownloadsBtn.addEventListener("click", fetchAdminDownloads);
+    refreshDownloadsBtn.addEventListener("click", () => {
+      fetchAdminDownloads();
+      fetchAdminStats();
+    });
   }
   
   const applyFilterBtn = document.getElementById("btn-admin-filter-apply");
@@ -1634,30 +1760,63 @@ function setupAdminContentListeners() {
     });
   }
 
-  const downloadsListEl = document.getElementById("admin-downloads-list");
-  if (downloadsListEl) {
-    downloadsListEl.addEventListener("click", async (e) => {
-      if (e.target.classList.contains("btn-admin-action")) {
-        const torboxId = e.target.getAttribute("data-torbox-id");
-        const action = e.target.getAttribute("data-action");
-        if (action === "resume") {
-          e.target.disabled = true;
-          e.target.textContent = "RESUMING...";
-          await resumeDownload(torboxId);
-          fetchAdminDownloads();
-        } else {
-          const confirmMsg = action === "delete"
-            ? "Are you sure you want to delete this completed download and remove its files from the server?"
-            : "Are you sure you want to cancel this transfer and remove any temporary files?";
-          if (confirm(confirmMsg)) {
-            e.target.disabled = true;
-            e.target.textContent = action === "delete" ? "DELETING..." : "ABORTING...";
-            await cancelDownload(torboxId);
-            fetchAdminDownloads();
-          }
+  // Mobile users cards listeners
+  const usersMobileCardsEl = document.getElementById("admin-users-cards-mobile");
+  if (usersMobileCardsEl) {
+    usersMobileCardsEl.addEventListener("change", async (e) => {
+      if (e.target.tagName === "SELECT") {
+        const userId = e.target.getAttribute("data-user-id");
+        const groupName = e.target.value;
+        await updateAdminUserRole(userId, groupName);
+      }
+    });
+
+    usersMobileCardsEl.addEventListener("click", async (e) => {
+      if (e.target.classList.contains("btn-approve-user")) {
+        const userId = e.target.getAttribute("data-user-id");
+        await updateAdminUserRole(userId, "User");
+      } else if (e.target.classList.contains("btn-delete-user")) {
+        const userId = e.target.getAttribute("data-user-id");
+        if (confirm("Are you sure you want to completely delete this user and their data?")) {
+          await deleteAdminUser(userId);
         }
       }
     });
+  }
+
+  const handleAdminDlAction = async (e) => {
+    if (e.target.classList.contains("btn-admin-action")) {
+      const torboxId = e.target.getAttribute("data-torbox-id");
+      const action = e.target.getAttribute("data-action");
+      if (action === "resume") {
+        e.target.disabled = true;
+        e.target.textContent = "RESUMING...";
+        await resumeDownload(torboxId);
+        fetchAdminDownloads();
+        fetchAdminStats();
+      } else {
+        const confirmMsg = action === "delete"
+          ? "Are you sure you want to delete this completed download and remove its files from the server?"
+          : "Are you sure you want to cancel this transfer and remove any temporary files?";
+        if (confirm(confirmMsg)) {
+          e.target.disabled = true;
+          e.target.textContent = action === "delete" ? "DELETING..." : "ABORTING...";
+          await cancelDownload(torboxId);
+          fetchAdminDownloads();
+          fetchAdminStats();
+        }
+      }
+    }
+  };
+
+  const downloadsListEl = document.getElementById("admin-downloads-list");
+  if (downloadsListEl) {
+    downloadsListEl.addEventListener("click", handleAdminDlAction);
+  }
+
+  const downloadsMobileCardsEl = document.getElementById("admin-downloads-cards-mobile");
+  if (downloadsMobileCardsEl) {
+    downloadsMobileCardsEl.addEventListener("click", handleAdminDlAction);
   }
 
   const settingsForm = document.getElementById("settings-form");
@@ -1700,6 +1859,7 @@ function setupAdminContentListeners() {
             statusEl.style.display = "block";
             statusEl.scrollIntoView({ behavior: "smooth" });
           }
+          fetchAdminStats();
         } else {
           alert("Failed to update config: " + resData.error);
         }
@@ -1709,6 +1869,8 @@ function setupAdminContentListeners() {
       }
     });
   }
+
+  fetchAdminStats();
 
   if (state.adminActiveTab === "users") {
     fetchAdminUsers();
@@ -1721,6 +1883,7 @@ function setupAdminContentListeners() {
 
 async function fetchAdminUsers() {
   const container = document.getElementById("admin-users-list");
+  const mobileContainer = document.getElementById("admin-users-cards-mobile");
   if (!container) return;
   
   try {
@@ -1734,28 +1897,37 @@ async function fetchAdminUsers() {
       renderAdminUsersList(users);
     } else {
       const err = await resp.json();
-      container.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Failed to load users: ${err.error}</td></tr>`;
+      const errHtml = `<tr><td colspan="5" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Failed to load users: ${escapeHtml(err.error)}</td></tr>`;
+      container.innerHTML = errHtml;
+      if (mobileContainer) mobileContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">${escapeHtml(err.error)}</div>`;
     }
   } catch (e) {
     console.error(e);
     container.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Network error loading users.</td></tr>`;
+    if (mobileContainer) mobileContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Network error loading users.</div>`;
   }
 }
 
 function renderAdminUsersList(users) {
   const container = document.getElementById("admin-users-list");
+  const mobileContainer = document.getElementById("admin-users-cards-mobile");
   if (!container) return;
   
   if (users.length === 0) {
-    container.innerHTML = `<tr><td colspan="5" class="empty-state" style="padding: 2rem;">No user accounts found.</td></tr>`;
+    const emptyHtml = `<tr><td colspan="5" class="empty-state" style="padding: 2rem;">No user accounts found.</td></tr>`;
+    container.innerHTML = emptyHtml;
+    if (mobileContainer) mobileContainer.innerHTML = `<div class="empty-state">No user accounts found.</div>`;
     return;
   }
   
   const isAdmin = state.user && state.user.group_name === "Admin";
   
+  // Desktop table rows
   container.innerHTML = users.map(u => {
     const isSelf = state.user && Number(u.id) === Number(state.user.id);
-    const joinDate = new Date(u.created_at).toLocaleDateString();
+    const dObj = new Date(u.created_at);
+    const dateFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "N/A";
+    const timeFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : "";
     const sizeText = u.total_downloaded_bytes ? formatBytes(u.total_downloaded_bytes) : "0 B";
     
     const isUnapproved = u.group_id === null || u.group_name === "None (Pending Approval)";
@@ -1763,7 +1935,7 @@ function renderAdminUsersList(users) {
     let roleActionHtml = "";
     if (!isAdmin) {
       const labelClass = isUnapproved ? "color: var(--danger); font-weight: bold;" : "color: var(--text-primary);";
-      roleActionHtml = `<span style="${labelClass}">${u.group_name}</span>`;
+      roleActionHtml = `<span style="${labelClass}">${escapeHtml(u.group_name)}</span>`;
     } else {
       const selectedNone = isUnapproved ? "selected" : "";
       const selectedUser = u.group_name === "User" ? "selected" : "";
@@ -1771,7 +1943,7 @@ function renderAdminUsersList(users) {
       const selectedAdmin = u.group_name === "Admin" ? "selected" : "";
       
       roleActionHtml = `
-        <select class="form-input admin-role-select" data-user-id="${u.id}" style="padding: 0.15rem 0.5rem; font-size: 0.75rem; width: 140px; height: 26px; line-height: 1; display: inline-block;">
+        <select class="form-input admin-role-select" data-user-id="${u.id}" style="padding: 0.25rem 0.5rem; font-size: 0.75rem; width: 140px; height: 30px; display: inline-block;">
           <option value="None" ${selectedNone}>Pending Approval</option>
           <option value="User" ${selectedUser}>User</option>
           <option value="Moderator" ${selectedMod}>Moderator</option>
@@ -1784,45 +1956,121 @@ function renderAdminUsersList(users) {
     if (isAdmin) {
       if (isUnapproved) {
         actionsHtml += `
-          <button class="btn btn-primary btn-approve-user" data-user-id="${u.id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">APPROVE</button>
+          <button class="btn btn-primary btn-approve-user" data-user-id="${u.id}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0;">APPROVE</button>
         `;
       }
       if (!isSelf) {
         actionsHtml += `
-          <button class="btn btn-danger btn-delete-user" data-user-id="${u.id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; margin-left: 4px; border-radius: 0;">DELETE</button>
+          <button class="btn btn-danger btn-delete-user" data-user-id="${u.id}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; margin-left: 4px; border-radius: 0;">DELETE</button>
         `;
       } else {
-        actionsHtml += `<span style="font-size: 0.65rem; color: var(--text-muted); font-style: italic;">Self</span>`;
+        actionsHtml += `<span style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">Self</span>`;
       }
     } else {
-      actionsHtml = `<span style="font-size: 0.65rem; color: var(--text-muted); font-style: italic;">Read-Only</span>`;
+      actionsHtml = `<span style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">Read-Only</span>`;
     }
     
     return `
-      <tr style="border-bottom: 1px solid var(--border-color);">
-        <td style="padding: 0.75rem 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-          <img src="${escapeHtml(u.profile_picture || FALLBACK_AVATAR)}" style="width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--border-color);">
+      <tr>
+        <td style="display: flex; align-items: center; gap: 0.6rem;">
+          <img src="${escapeHtml(u.profile_picture || FALLBACK_AVATAR)}" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-color); flex-shrink: 0;">
           <div style="display: flex; flex-direction: column;">
-            <strong style="color: var(--text-primary); font-size: 0.8rem;">${escapeHtml(u.full_name || u.username)}</strong>
-            <span style="font-size: 0.65rem; color: var(--text-muted);">${escapeHtml(u.username)}</span>
+            <strong style="color: var(--text-primary); font-size: 0.85rem;">${escapeHtml(u.full_name || u.username)}</strong>
+            <span style="font-size: 0.7rem; color: var(--text-secondary);">${escapeHtml(u.username)}</span>
           </div>
         </td>
-        <td style="padding: 0.75rem 0.5rem; color: var(--text-secondary); vertical-align: middle;">${joinDate}</td>
-        <td style="padding: 0.75rem 0.5rem; vertical-align: middle;">${roleActionHtml}</td>
-        <td style="padding: 0.75rem 0.5rem; text-align: right; color: var(--text-secondary); vertical-align: middle;">
-          <strong>${u.total_downloads}</strong> releases<br>
-          <span style="font-size: 0.65rem; color: var(--text-muted);">${sizeText}</span>
+        <td style="color: var(--text-secondary); vertical-align: middle;">
+          <div class="admin-datetime">
+            <span class="admin-datetime-date">${dateFormatted}</span>
+            <span class="admin-datetime-time">${timeFormatted}</span>
+          </div>
         </td>
-        <td style="padding: 0.75rem 0.5rem; text-align: right; vertical-align: middle;">
+        <td style="vertical-align: middle;">${roleActionHtml}</td>
+        <td style="text-align: right; color: var(--text-primary); vertical-align: middle;">
+          <strong>${u.total_downloads}</strong> releases<br>
+          <span style="font-size: 0.7rem; color: var(--text-secondary);">${sizeText}</span>
+        </td>
+        <td style="text-align: right; vertical-align: middle;">
           ${actionsHtml}
         </td>
       </tr>
     `;
   }).join("");
+
+  // Mobile users cards
+  if (mobileContainer) {
+    mobileContainer.innerHTML = users.map(u => {
+      const isSelf = state.user && Number(u.id) === Number(state.user.id);
+      const dObj = new Date(u.created_at);
+      const dateFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "N/A";
+      const sizeText = u.total_downloaded_bytes ? formatBytes(u.total_downloaded_bytes) : "0 B";
+      const isUnapproved = u.group_id === null || u.group_name === "None (Pending Approval)";
+      
+      let roleHtml = "";
+      if (isAdmin) {
+        const selectedNone = isUnapproved ? "selected" : "";
+        const selectedUser = u.group_name === "User" ? "selected" : "";
+        const selectedMod = u.group_name === "Moderator" ? "selected" : "";
+        const selectedAdmin = u.group_name === "Admin" ? "selected" : "";
+        roleHtml = `
+          <select class="form-input admin-role-select" data-user-id="${u.id}" style="width: 100%; height: 32px; font-size: 0.8rem;">
+            <option value="None" ${selectedNone}>Pending Approval</option>
+            <option value="User" ${selectedUser}>User</option>
+            <option value="Moderator" ${selectedMod}>Moderator</option>
+            <option value="Admin" ${selectedAdmin}>Admin</option>
+          </select>
+        `;
+      } else {
+        roleHtml = `<strong>${escapeHtml(u.group_name)}</strong>`;
+      }
+
+      let actionsHtml = "";
+      if (isAdmin) {
+        if (isUnapproved) {
+          actionsHtml += `<button class="btn btn-primary btn-approve-user" data-user-id="${u.id}" style="flex: 1; padding: 0.4rem; font-size: 0.75rem;">APPROVE</button>`;
+        }
+        if (!isSelf) {
+          actionsHtml += `<button class="btn btn-danger btn-delete-user" data-user-id="${u.id}" style="flex: 1; padding: 0.4rem; font-size: 0.75rem;">DELETE</button>`;
+        }
+      }
+
+      return `
+        <div class="admin-mobile-card">
+          <div class="admin-mobile-card-header">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <img src="${escapeHtml(u.profile_picture || FALLBACK_AVATAR)}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border-color);">
+              <div>
+                <strong style="color: var(--text-primary); font-size: 0.9rem;">${escapeHtml(u.full_name || u.username)}</strong><br>
+                <span style="font-size: 0.75rem; color: var(--text-secondary);">${escapeHtml(u.username)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="admin-mobile-card-meta">
+            <div>
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">JOINED</span>
+              <span style="color: var(--text-primary); font-size: 0.8rem;">${dateFormatted}</span>
+            </div>
+            <div>
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">ACTIVITY</span>
+              <span style="color: var(--text-primary); font-size: 0.8rem;">${u.total_downloads} dls (${sizeText})</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+            <div>
+              <label style="font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.2rem; display: block;">ROLE</label>
+              ${roleHtml}
+            </div>
+            ${actionsHtml ? `<div class="admin-mobile-card-actions" style="margin-top: 0.25rem;">${actionsHtml}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
 }
 
 async function fetchAdminDownloads() {
   const container = document.getElementById("admin-downloads-list");
+  const mobileContainer = document.getElementById("admin-downloads-cards-mobile");
   if (!container) return;
   
   const search = document.getElementById("admin-search-dl").value;
@@ -1847,29 +2095,41 @@ async function fetchAdminDownloads() {
       renderAdminDownloadsList(downloads);
     } else {
       const err = await resp.json();
-      container.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Failed to load downloads: ${escapeHtml(err.error)}</td></tr>`;
+      const errHtml = `<tr><td colspan="6" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Failed to load downloads: ${escapeHtml(err.error)}</td></tr>`;
+      container.innerHTML = errHtml;
+      if (mobileContainer) mobileContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">${escapeHtml(err.error)}</div>`;
     }
   } catch (e) {
     console.error(e);
-    container.innerHTML = `<tr><td colspan="5" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Network error loading downloads.</td></tr>`;
+    container.innerHTML = `<tr><td colspan="6" class="empty-state" style="color: var(--danger); padding: 1.5rem;">Network error loading downloads.</td></tr>`;
+    if (mobileContainer) mobileContainer.innerHTML = `<div class="empty-state" style="color: var(--danger);">Network error loading downloads.</div>`;
   }
 }
 
 function renderAdminDownloadsList(downloads) {
   const container = document.getElementById("admin-downloads-list");
+  const mobileContainer = document.getElementById("admin-downloads-cards-mobile");
   if (!container) return;
   
   if (downloads.length === 0) {
-    container.innerHTML = `<tr><td colspan="5" class="empty-state" style="padding: 2rem;">No system downloads found.</td></tr>`;
+    const emptyHtml = `<tr><td colspan="6" class="empty-state" style="padding: 2rem;">No system downloads found.</td></tr>`;
+    container.innerHTML = emptyHtml;
+    if (mobileContainer) mobileContainer.innerHTML = `<div class="empty-state">No system downloads found.</div>`;
     return;
   }
   
   const isAdmin = state.user && state.user.group_name === "Admin";
   
+  // Desktop table rows
   container.innerHTML = downloads.map(dl => {
     const sizeText = dl.size ? formatBytes(dl.size) : "0 B";
     const progressText = dl.progress !== undefined ? `${dl.progress}%` : "0%";
-    const dateText = new Date(dl.created_at).toLocaleDateString();
+    const speedText = dl.speed && dl.speed > 0 ? ` • ${formatSpeed(dl.speed)}` : "";
+    
+    // Exact Date and Time Added
+    const dObj = new Date(dl.created_at);
+    const dateFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "N/A";
+    const timeFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "";
     
     const isOwner = state.user && Number(dl.user_id) === Number(state.user.id);
     const canControl = isAdmin || isOwner;
@@ -1877,47 +2137,136 @@ function renderAdminDownloadsList(downloads) {
     const statusLower = (dl.status || "").toLowerCase();
     const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded");
     const isFailed = statusLower.includes("failed") || statusLower.includes("error") || statusLower.includes("stalled") || statusLower.includes("paused") || statusLower.includes("interrupted");
+    const isDownloading = statusLower.includes("downloading") || statusLower.includes("moving");
     
     let btnHtml = "";
     if (canControl) {
       if (isCompleted) {
-        btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">DELETE</button>`;
+        btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0;">DELETE</button>`;
       } else if (isFailed) {
-        const resumeBtn = `<button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0; margin-right: 4px;">RESUME</button>`;
-        const clearBtn = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`;
+        const resumeBtn = `<button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${dl.torbox_id}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0; margin-right: 4px;">RESUME</button>`;
+        const clearBtn = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0;">CLEAR</button>`;
         btnHtml = `${resumeBtn}${clearBtn}`;
       } else {
-        btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${dl.torbox_id}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
+        btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${dl.torbox_id}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0;">CANCEL</button>`;
       }
     } else {
-      btnHtml = `<span style="font-size: 0.65rem; color: var(--text-muted); font-style: italic;">No Access</span>`;
+      btnHtml = `<span style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">No Access</span>`;
     }
     
-    const statusClass = getStatusClass(dl.status);
+    let badgeClass = "badge-queued";
+    if (isCompleted) badgeClass = "badge-completed";
+    else if (isDownloading) badgeClass = "badge-downloading";
+    else if (isFailed) badgeClass = "badge-failed";
+
+    const isTv = dl.category === "tv" || (dl.title && (dl.title.includes("Season") || dl.title.includes("S0")));
+    const catBadgeClass = isTv ? "badge-tv" : "badge-movie";
+    const catLabel = isTv ? "TV" : "MOVIE";
     
     return `
-      <tr id="admin-dl-row-${dl.torbox_id}" style="border-bottom: 1px solid var(--border-color);">
-        <td style="padding: 0.75rem 0.5rem; max-width: 320px; word-break: break-all;">
-          <strong style="color: var(--text-primary); font-size: 0.80rem;">${escapeHtml(dl.title || dl.filename || "Unknown Title")}</strong><br>
-          <span style="font-size: 0.65rem; color: var(--text-muted);">${escapeHtml(dl.filename || "")}</span><br>
-          <span style="font-size: 0.65rem; color: var(--text-muted);">${dateText}</span>
+      <tr id="admin-dl-row-${dl.torbox_id}">
+        <td style="max-width: 280px; word-break: break-word;">
+          <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.2rem;">
+            <span class="admin-badge ${catBadgeClass}">${catLabel}</span>
+            <strong style="color: var(--text-primary); font-size: 0.85rem;">${escapeHtml(dl.title || dl.filename || "Unknown Release")}</strong>
+          </div>
+          <span style="font-size: 0.7rem; color: var(--text-secondary); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(dl.filename || "")}</span>
         </td>
-        <td style="padding: 0.75rem 0.5rem; color: var(--text-secondary); vertical-align: middle;">
-          <strong>${escapeHtml(dl.full_name)}</strong><br>
-          <span style="font-size: 0.65rem; color: var(--text-muted);">${escapeHtml(dl.username)}</span>
+        <td style="vertical-align: middle;">
+          <div class="admin-datetime">
+            <span class="admin-datetime-date">${dateFormatted}</span>
+            <span class="admin-datetime-time">${timeFormatted}</span>
+          </div>
         </td>
-        <td id="admin-dl-size-${dl.torbox_id}" style="padding: 0.75rem 0.5rem; color: var(--text-secondary); vertical-align: middle;">${sizeText}</td>
-        <td style="padding: 0.75rem 0.5rem; vertical-align: middle;">
-          <span id="admin-dl-status-${dl.torbox_id}" class="dl-item-status dl-status-${statusClass}" style="padding: 0.1rem 0.3rem; border: 1px solid var(--border-color); font-size: 0.65rem; display: inline-block;">
-            ${escapeHtml(dl.status.toUpperCase())} (${escapeHtml(progressText)})
+        <td style="color: var(--text-secondary); vertical-align: middle;">
+          <strong style="color: var(--text-primary); font-size: 0.8rem;">${escapeHtml(dl.full_name || dl.username)}</strong><br>
+          <span style="font-size: 0.7rem; color: var(--text-secondary);">${escapeHtml(dl.username)}</span>
+        </td>
+        <td id="admin-dl-size-${dl.torbox_id}" style="color: var(--text-primary); font-weight: 500; vertical-align: middle;">${sizeText}</td>
+        <td style="vertical-align: middle;">
+          <span id="admin-dl-status-${dl.torbox_id}" class="admin-badge ${badgeClass}">
+            ${escapeHtml(dl.status.toUpperCase())} (${escapeHtml(progressText)}${speedText})
           </span>
         </td>
-        <td id="admin-dl-btn-${dl.torbox_id}" style="padding: 0.75rem 0.5rem; text-align: right; vertical-align: middle;">
+        <td id="admin-dl-btn-${dl.torbox_id}" style="text-align: right; vertical-align: middle;">
           ${btnHtml}
         </td>
       </tr>
     `;
   }).join("");
+
+  // Mobile downloads card list
+  if (mobileContainer) {
+    mobileContainer.innerHTML = downloads.map(dl => {
+      const sizeText = dl.size ? formatBytes(dl.size) : "0 B";
+      const progressText = dl.progress !== undefined ? `${dl.progress}%` : "0%";
+      const speedText = dl.speed && dl.speed > 0 ? ` • ${formatSpeed(dl.speed)}` : "";
+      
+      const dObj = new Date(dl.created_at);
+      const dateFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "N/A";
+      const timeFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : "";
+      
+      const isOwner = state.user && Number(dl.user_id) === Number(state.user.id);
+      const canControl = isAdmin || isOwner;
+      
+      const statusLower = (dl.status || "").toLowerCase();
+      const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded");
+      const isFailed = statusLower.includes("failed") || statusLower.includes("error") || statusLower.includes("stalled") || statusLower.includes("paused") || statusLower.includes("interrupted");
+      const isDownloading = statusLower.includes("downloading") || statusLower.includes("moving");
+      
+      let btnHtml = "";
+      if (canControl) {
+        if (isCompleted) {
+          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">DELETE</button>`;
+        } else if (isFailed) {
+          btnHtml = `
+            <button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${dl.torbox_id}" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">RESUME</button>
+            <button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${dl.torbox_id}" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">CLEAR</button>
+          `;
+        } else {
+          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${dl.torbox_id}" style="padding: 0.4rem 0.75rem; font-size: 0.75rem;">CANCEL</button>`;
+        }
+      }
+
+      let badgeClass = "badge-queued";
+      if (isCompleted) badgeClass = "badge-completed";
+      else if (isDownloading) badgeClass = "badge-downloading";
+      else if (isFailed) badgeClass = "badge-failed";
+
+      const isTv = dl.category === "tv" || (dl.title && (dl.title.includes("Season") || dl.title.includes("S0")));
+      const catBadgeClass = isTv ? "badge-tv" : "badge-movie";
+      const catLabel = isTv ? "TV" : "MOVIE";
+
+      return `
+        <div class="admin-mobile-card">
+          <div class="admin-mobile-card-header">
+            <div>
+              <div style="display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.25rem;">
+                <span class="admin-badge ${catBadgeClass}">${catLabel}</span>
+                <span class="admin-badge ${badgeClass}">${escapeHtml(dl.status.toUpperCase())} (${escapeHtml(progressText)})</span>
+              </div>
+              <strong class="admin-mobile-card-title">${escapeHtml(dl.title || dl.filename || "Unknown Title")}</strong>
+            </div>
+          </div>
+          <div class="admin-mobile-card-meta">
+            <div>
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">ADDED ON</span>
+              <span style="color: var(--text-primary); font-size: 0.8rem; font-family: var(--font-mono);">${dateFormatted} ${timeFormatted}</span>
+            </div>
+            <div>
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">SIZE & SPEED</span>
+              <span style="color: var(--text-primary); font-size: 0.8rem; font-family: var(--font-mono);">${sizeText}${speedText}</span>
+            </div>
+            <div>
+              <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">REQUESTED BY</span>
+              <span style="color: var(--text-secondary); font-size: 0.8rem;">${escapeHtml(dl.full_name || dl.username)}</span>
+            </div>
+          </div>
+          ${btnHtml ? `<div class="admin-mobile-card-actions">${btnHtml}</div>` : ''}
+        </div>
+      `;
+    }).join("");
+  }
 }
 
 async function updateAdminUserRole(userId, groupName) {

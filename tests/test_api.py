@@ -463,6 +463,20 @@ class TestAPI(unittest.TestCase):
 		self.assertIn("https://haos.rc2.rico.cx/api/webhook/rico_cx_crash_alert", args[0])
 		self.assertEqual(kwargs["json"]["event"], "test_crash")
 
+	def test_admin_stats_endpoint(self):
+		# Promote test user to Admin
+		self.db.execute("UPDATE users SET group_id = (SELECT id FROM groups WHERE name = 'Admin') WHERE id = ?", (self.user.id,))
+		headers = {"Authorization": f"Bearer {self.token}"}
+		response = self.client.get('/api/admin/stats', headers=headers)
+		self.assertEqual(response.status_code, 200)
+		data = json.loads(response.data)
+		self.assertIn("database", data)
+		self.assertIn("size_formatted", data["database"])
+		self.assertIn("storage", data)
+		self.assertIn("downloads", data)
+		self.assertIn("users", data)
+		self.assertIn("server", data)
+
 
 if __name__ == '__main__':
 	unittest.main()
