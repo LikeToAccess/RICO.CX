@@ -1930,6 +1930,11 @@ function renderAdminUsersList(users) {
     const timeFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : "";
     const sizeText = u.total_downloaded_bytes ? formatBytes(u.total_downloaded_bytes) : "0 B";
     
+    const lastDlObj = u.last_downloaded_at ? new Date(u.last_downloaded_at) : null;
+    const lastDlFormatted = lastDlObj && !isNaN(lastDlObj.getTime())
+      ? `Last active: ${lastDlObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+      : "No downloads yet";
+
     const isUnapproved = u.group_id === null || u.group_name === "None (Pending Approval)";
     
     let roleActionHtml = "";
@@ -1989,8 +1994,8 @@ function renderAdminUsersList(users) {
         </td>
         <td style="vertical-align: middle; white-space: nowrap;">${roleActionHtml}</td>
         <td style="text-align: right; color: var(--text-primary); vertical-align: middle; white-space: nowrap;">
-          <strong>${u.total_downloads}</strong> releases<br>
-          <span style="font-size: 0.72rem; color: var(--text-secondary);">${sizeText}</span>
+          <strong>${u.total_downloads}</strong> releases (${sizeText})<br>
+          <span style="font-size: 0.7rem; color: var(--text-secondary);">${lastDlFormatted}</span>
         </td>
         <td style="text-align: right; vertical-align: middle; white-space: nowrap;">
           ${actionsHtml}
@@ -2006,6 +2011,10 @@ function renderAdminUsersList(users) {
       const dObj = new Date(u.created_at);
       const dateFormatted = !isNaN(dObj.getTime()) ? dObj.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : "N/A";
       const sizeText = u.total_downloaded_bytes ? formatBytes(u.total_downloaded_bytes) : "0 B";
+      const lastDlObj = u.last_downloaded_at ? new Date(u.last_downloaded_at) : null;
+      const lastDlFormatted = lastDlObj && !isNaN(lastDlObj.getTime())
+        ? `Last: ${lastDlObj.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : "No downloads";
       const isUnapproved = u.group_id === null || u.group_name === "None (Pending Approval)";
       
       let roleHtml = "";
@@ -2055,6 +2064,7 @@ function renderAdminUsersList(users) {
             <div>
               <span style="font-size: 0.7rem; color: var(--text-muted); display: block;">ACTIVITY</span>
               <span style="color: var(--text-primary); font-size: 0.8rem;">${u.total_downloads} dls (${sizeText})</span>
+              <span style="color: var(--text-secondary); font-size: 0.7rem; display: block;">${lastDlFormatted}</span>
             </div>
           </div>
           <div style="display: flex; flex-direction: column; gap: 0.5rem;">

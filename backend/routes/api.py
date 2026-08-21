@@ -1475,10 +1475,14 @@ def admin_users():
 	query = """
 		SELECT u.*, g.name as group_name,
 			   (SELECT COUNT(*) FROM downloads WHERE user_id = u.id) as total_downloads,
-			   (SELECT SUM(size) FROM downloads WHERE user_id = u.id AND status = 'completed') as total_downloaded_bytes
+			   (SELECT SUM(size) FROM downloads WHERE user_id = u.id AND status = 'completed') as total_downloaded_bytes,
+			   (SELECT MAX(created_at) FROM downloads WHERE user_id = u.id) as last_downloaded_at
 		FROM users u
 		LEFT JOIN groups g ON u.group_id = g.id
-		ORDER BY u.created_at DESC
+		ORDER BY 
+			CASE WHEN (SELECT MAX(created_at) FROM downloads WHERE user_id = u.id) IS NOT NULL THEN 0 ELSE 1 END,
+			(SELECT MAX(created_at) FROM downloads WHERE user_id = u.id) DESC,
+			u.created_at DESC
 	"""
 	rows = db.query(query)
 	users_list = []
@@ -1492,6 +1496,7 @@ def admin_users():
 				"last_name": r["last_name"],
 				"profile_picture": r["profile_picture"],
 				"created_at": r["created_at"],
+				"last_downloaded_at": r["last_downloaded_at"],
 				"group_id": r["group_id"],
 				"group_name": r["group_name"] or "None (Pending Approval)",
 				"total_downloads": r["total_downloads"] or 0,
