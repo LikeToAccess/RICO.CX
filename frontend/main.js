@@ -422,7 +422,7 @@ function renderAppShellTemplate() {
 // UI Inner View Contents
 function renderDashboardContent() {
   return `
-    <form id="search-form" class="search-block" onsubmit="return false;">
+    <form id="search-form" class="search-block">
       <div class="search-row">
         <div class="search-input-wrapper">
           <input type="text" id="search-input" class="form-input" required placeholder="Search movies, TV shows, or paste a magnet link/torrent hash..." enterkeyhint="search" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false">
@@ -1264,10 +1264,14 @@ function setupDashboardContentListeners() {
     });
     searchInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
+        e.preventDefault();
         searchInput.blur();
         if (document.activeElement && typeof document.activeElement.blur === "function") {
           document.activeElement.blur();
         }
+        const query = searchInput.value;
+        const category = document.getElementById("filter-category") ? document.getElementById("filter-category").value : "";
+        searchTrackers(query, category);
       }
     });
   }
