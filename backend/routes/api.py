@@ -763,6 +763,12 @@ def google_callback():
 			profile_picture=profile_picture
 		)
 		logger.info(f"Created new user via Google Authentication: {email} with role: {role}")
+		if role is None:
+			send_ha_notification("new_pending_user", {
+				"username": email,
+				"full_name": full_name or email,
+				"user_id": user.id
+			})
 	else:
 		# Update details in case they changed on Google profile
 		user.full_name = full_name

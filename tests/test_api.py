@@ -477,6 +477,19 @@ class TestAPI(unittest.TestCase):
 		self.assertIn("users", data)
 		self.assertIn("server", data)
 
+	@patch('requests.post')
+	def test_send_ha_notification_new_pending_user(self, mock_post):
+		from backend.routes.api import send_ha_notification
+		mock_resp = MagicMock()
+		mock_resp.status_code = 200
+		mock_post.return_value = mock_resp
+
+		send_ha_notification("new_pending_user", {"username": "newuser@example.com", "full_name": "New User", "user_id": 99})
+		mock_post.assert_called_once()
+		args, kwargs = mock_post.call_args
+		self.assertEqual(kwargs["json"]["event"], "new_pending_user")
+		self.assertEqual(kwargs["json"]["details"]["username"], "newuser@example.com")
+
 
 if __name__ == '__main__':
 	unittest.main()
