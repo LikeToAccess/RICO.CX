@@ -1972,25 +1972,27 @@ function renderAdminUsersList(users) {
     
     return `
       <tr>
-        <td style="display: flex; align-items: center; gap: 0.6rem;">
-          <img src="${escapeHtml(u.profile_picture || FALLBACK_AVATAR)}" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-color); flex-shrink: 0;">
-          <div style="display: flex; flex-direction: column;">
-            <strong style="color: var(--text-primary); font-size: 0.85rem;">${escapeHtml(u.full_name || u.username)}</strong>
-            <span style="font-size: 0.7rem; color: var(--text-secondary);">${escapeHtml(u.username)}</span>
+        <td style="vertical-align: middle;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img src="${escapeHtml(u.profile_picture || FALLBACK_AVATAR)}" style="width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border-color); flex-shrink: 0;">
+            <div style="display: flex; flex-direction: column; min-width: 0;">
+              <strong style="color: var(--text-primary); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(u.full_name || u.username)}</strong>
+              <span style="font-size: 0.72rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(u.username)}</span>
+            </div>
           </div>
         </td>
-        <td style="color: var(--text-secondary); vertical-align: middle;">
+        <td style="color: var(--text-secondary); vertical-align: middle; white-space: nowrap;">
           <div class="admin-datetime">
             <span class="admin-datetime-date">${dateFormatted}</span>
             <span class="admin-datetime-time">${timeFormatted}</span>
           </div>
         </td>
-        <td style="vertical-align: middle;">${roleActionHtml}</td>
-        <td style="text-align: right; color: var(--text-primary); vertical-align: middle;">
+        <td style="vertical-align: middle; white-space: nowrap;">${roleActionHtml}</td>
+        <td style="text-align: right; color: var(--text-primary); vertical-align: middle; white-space: nowrap;">
           <strong>${u.total_downloads}</strong> releases<br>
-          <span style="font-size: 0.7rem; color: var(--text-secondary);">${sizeText}</span>
+          <span style="font-size: 0.72rem; color: var(--text-secondary);">${sizeText}</span>
         </td>
-        <td style="text-align: right; vertical-align: middle;">
+        <td style="text-align: right; vertical-align: middle; white-space: nowrap;">
           ${actionsHtml}
         </td>
       </tr>

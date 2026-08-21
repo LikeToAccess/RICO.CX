@@ -61,8 +61,17 @@ body {
   transition: max-width var(--transition-speed) var(--transition-timing);
 }
 
+.container:has(.settings-box),
+.container.admin-expanded {
+  max-width: 1100px;
+}
+
 #app.sidebar-open .container {
   max-width: 760px;
+}
+
+#app.sidebar-open .container:has(.settings-box) {
+  max-width: 960px;
 }
 
 /* Header */
@@ -898,33 +907,44 @@ select.form-input {
   font-size: 0.68rem;
 }
 
+.admin-table-container {
+  overflow-x: auto;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  padding: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
 .admin-table {
   width: 100%;
+  min-width: 680px;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.8rem;
+  font-size: 0.825rem;
   font-family: var(--font-mono);
 }
 
 .admin-table th {
-  padding: 0.85rem 0.75rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-secondary);
   text-transform: uppercase;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   letter-spacing: 0.05em;
   font-weight: 600;
   background-color: var(--bg-primary);
+  white-space: nowrap;
 }
 
 .admin-table td {
-  padding: 0.85rem 0.75rem;
+  padding: 0.85rem 1rem;
   border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
+  line-height: 1.4;
 }
 
 .admin-table tr:hover td {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 /* Mobile Admin Card Views */
