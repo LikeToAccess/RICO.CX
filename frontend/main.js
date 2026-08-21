@@ -311,7 +311,7 @@ async function searchTrackers(query, category) {
   }
 }
 
-async function triggerDownload(magnet, title, filename, category, year, season, episode, size, btn) {
+async function triggerDownload(magnet, title, filename, category, year, season, episode, size, btn, overwrite = false) {
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span> REQUESTING...`;
 
@@ -325,7 +325,7 @@ async function triggerDownload(magnet, title, filename, category, year, season, 
     const resp = await fetch("/api/download", {
       method: "POST",
       headers: headers,
-      body: JSON.stringify({ magnet, title, filename, category, year, season, episode, size })
+      body: JSON.stringify({ magnet, title, filename, category, year, season, episode, size, overwrite })
     });
     
     const data = await resp.json();
@@ -353,13 +353,13 @@ async function triggerDownload(magnet, title, filename, category, year, season, 
       fetchDownloads();
     } else {
       btn.disabled = false;
-      btn.innerHTML = "DOWNLOAD";
+      btn.innerHTML = overwrite ? "RE-DOWNLOAD" : "DOWNLOAD";
       alert(`Download start failed: ${data.error}`);
     }
   } catch (err) {
     console.error("Trigger download failure:", err);
     btn.disabled = false;
-    btn.innerHTML = "DOWNLOAD";
+    btn.innerHTML = overwrite ? "RE-DOWNLOAD" : "DOWNLOAD";
     alert("Could not connect to download service.");
   }
 }
@@ -587,8 +587,8 @@ function updateSearchResultButtons() {
   const filteredData = getFilteredResults();
   
   cards.forEach((cardEl, index) => {
-    const selectEl = cardEl.querySelector(`select`);
-    const downloadBtn = cardEl.querySelector(`button[id^="btn-dl-"]`);
+    const selectEl = cardEl.querySelector("select");
+    const downloadBtn = cardEl.querySelector('button[id^="btn-dl-"]');
     if (!selectEl || !downloadBtn) return;
     
     const item = filteredData[index];
@@ -599,15 +599,11 @@ function updateSearchResultButtons() {
     const dlOption = downloads[dlIdx];
     if (!dlOption) return;
     
+    const isSavedInDb = item.in_database || downloads.some(d => d.in_database || d.downloaded);
     const activeDl = state.downloads.find(d => d.magnet === dlOption.download_url);
-    
-    if (dlOption.downloaded) {
-      downloadBtn.disabled = true;
-      downloadBtn.innerHTML = "DOWNLOADED";
-      downloadBtn.className = "btn";
-      downloadBtn.removeAttribute("data-active-download");
-      downloadBtn.removeAttribute("data-torrent-id");
-    } else if (activeDl) {
+    const isActiveInProgress = activeDl && !activeDl.status.toLowerCase().includes("completed") && !activeDl.status.toLowerCase().includes("failed");
+
+    if (isActiveInProgress) {
       const progress = activeDl.progress || 0;
       const status = activeDl.status;
       
@@ -616,18 +612,36 @@ function updateSearchResultButtons() {
       downloadBtn.setAttribute("data-torrent-id", activeDl.torbox_id);
       
       const statusUpper = status.toUpperCase();
-      const isHovered = downloadBtn.matches(':hover');
+      const isHovered = downloadBtn.matches(":hover");
       downloadBtn.setAttribute("data-normal-text", `${statusUpper} (${progress}%)`);
       if (!isHovered) {
         downloadBtn.innerHTML = `${statusUpper} (${progress}%)`;
         downloadBtn.className = "btn btn-primary btn-status-active";
       }
+    } else if (dlOption.in_database || dlOption.downloaded) {
+      downloadBtn.disabled = false;
+      downloadBtn.innerHTML = "RE-DOWNLOAD";
+      downloadBtn.className = "btn btn-secondary";
+      downloadBtn.setAttribute("data-overwrite", "true");
+      downloadBtn.removeAttribute("data-active-download");
+      downloadBtn.removeAttribute("data-torrent-id");
+      downloadBtn.removeAttribute("data-normal-text");
+    } else if (isSavedInDb) {
+      downloadBtn.disabled = false;
+      downloadBtn.innerHTML = "DOWNLOAD & REPLACE";
+      downloadBtn.className = "btn btn-primary";
+      downloadBtn.setAttribute("data-overwrite", "true");
+      downloadBtn.removeAttribute("data-active-download");
+      downloadBtn.removeAttribute("data-torrent-id");
+      downloadBtn.removeAttribute("data-normal-text");
     } else {
       downloadBtn.disabled = false;
       downloadBtn.innerHTML = "DOWNLOAD";
       downloadBtn.className = "btn btn-primary";
+      downloadBtn.setAttribute("data-overwrite", "false");
       downloadBtn.removeAttribute("data-active-download");
       downloadBtn.removeAttribute("data-torrent-id");
+      downloadBtn.removeAttribute("data-normal-text");
     }
   });
 }
@@ -652,7 +666,8 @@ function renderSearchResults() {
   container.innerHTML = "";
   filteredData.forEach((item, index) => {
     const cardEl = document.createElement("div");
-    cardEl.className = "media-card animate-slide";
+    const isSavedInDb = item.in_database || item.downloads.some(d => d.in_database || d.downloaded);
+    cardEl.className = isSavedInDb ? "media-card in-database animate-slide" : "media-card animate-slide";
     
     const downloads = item.downloads;
     const defaultOption = downloads[0];
@@ -661,7 +676,8 @@ function renderSearchResults() {
     let optionsHtml = "";
     downloads.forEach((dl, dlIdx) => {
       const displaySize = formatBytes(dl.size);
-      const marker = dl.downloaded ? " [ALREADY DOWNLOADED]" : "";
+      const isSaved = dl.in_database || dl.downloaded;
+      const marker = isSaved ? " • [ON SERVER]" : "";
       optionsHtml += `
         <option value="${dlIdx}">
           [${displaySize} | Seeds: ${escapeHtml(dl.seeders)}]${marker} - ${escapeHtml(dl.title)}
@@ -672,6 +688,12 @@ function renderSearchResults() {
     const isTV = item.is_tv;
     const yearText = item.year ? `(${item.year})` : "";
     const categoryBadge = isTV ? `<span class="media-type-badge">TV</span>` : `<span class="media-type-badge">MOVIE</span>`;
+    const dbBadge = isSavedInDb ? `
+      <span class="media-in-db-badge" title="This media is already saved on the server database">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        ON SERVER
+      </span>
+    ` : "";
     
     // Poster representation
     const posterHtml = item.poster_url 
@@ -693,6 +715,7 @@ function renderSearchResults() {
           <div class="media-title-line">
             <span>${escapeHtml(item.clean_title)} ${escapeHtml(yearText)}</span>
             ${categoryBadge}
+            ${dbBadge}
           </div>
           <div class="media-meta-line">
             <span>Size Range: <strong>${escapeHtml(sizeRangeText)}</strong></span>
@@ -739,37 +762,17 @@ function renderSearchResults() {
       
       tagsContainer.innerHTML += `<span class="tag-badge" style="border-style: solid; opacity: 0.6;">${escapeHtml(dlOption.indexer)}</span>`;
       
+      if (dlOption.in_database || dlOption.downloaded) {
+        tagsContainer.innerHTML += `<span class="tag-badge tag-badge-in-db">✓ Saved on Server</span>`;
+      } else if (isSavedInDb) {
+        tagsContainer.innerHTML += `<span class="tag-badge tag-badge-alt-version">Alternate Version (Will Overwrite)</span>`;
+      }
+      
       // Update download button state
       const activeDl = state.downloads.find(d => d.magnet === dlOption.download_url);
-      const isCompleted = dlOption.downloaded || (activeDl && activeDl.status === "completed");
-      
-      const isAdmin = state.user && state.user.group_name === "Admin";
-      const downloadOwnerId = dlOption.user_id || (activeDl ? activeDl.user_id : null);
-      const isOwner = state.user && (
-        (downloadOwnerId !== null && Number(downloadOwnerId) === Number(state.user.id)) ||
-        (activeDl && (activeDl.user_id === undefined || activeDl.user_id === null || Number(activeDl.user_id) === Number(state.user.id)))
-      );
-      
-      const torboxId = dlOption.torbox_id || (activeDl ? activeDl.torbox_id : null);
-      const canDelete = (isAdmin || isOwner) && torboxId;
+      const isActiveInProgress = activeDl && !activeDl.status.toLowerCase().includes("completed") && !activeDl.status.toLowerCase().includes("failed");
 
-      if (isCompleted) {
-        if (canDelete) {
-          downloadBtn.disabled = false;
-          downloadBtn.innerHTML = "DELETE";
-          downloadBtn.className = "btn btn-danger";
-          downloadBtn.setAttribute("data-active-download", "true");
-          downloadBtn.setAttribute("data-torrent-id", torboxId);
-          downloadBtn.removeAttribute("data-normal-text");
-        } else {
-          downloadBtn.disabled = true;
-          downloadBtn.innerHTML = "DOWNLOADED";
-          downloadBtn.className = "btn";
-          downloadBtn.removeAttribute("data-active-download");
-          downloadBtn.removeAttribute("data-torrent-id");
-          downloadBtn.removeAttribute("data-normal-text");
-        }
-      } else if (activeDl) {
+      if (isActiveInProgress) {
         const progress = activeDl.progress || 0;
         const status = activeDl.status;
         
@@ -781,10 +784,27 @@ function renderSearchResults() {
         downloadBtn.innerHTML = `${statusUpper} (${progress}%)`;
         downloadBtn.className = "btn btn-primary btn-status-active";
         downloadBtn.setAttribute("data-normal-text", `${statusUpper} (${progress}%)`);
+      } else if (dlOption.in_database || dlOption.downloaded) {
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = "RE-DOWNLOAD";
+        downloadBtn.className = "btn btn-secondary";
+        downloadBtn.setAttribute("data-overwrite", "true");
+        downloadBtn.removeAttribute("data-active-download");
+        downloadBtn.removeAttribute("data-torrent-id");
+        downloadBtn.removeAttribute("data-normal-text");
+      } else if (isSavedInDb) {
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = "DOWNLOAD & REPLACE";
+        downloadBtn.className = "btn btn-primary";
+        downloadBtn.setAttribute("data-overwrite", "true");
+        downloadBtn.removeAttribute("data-active-download");
+        downloadBtn.removeAttribute("data-torrent-id");
+        downloadBtn.removeAttribute("data-normal-text");
       } else {
         downloadBtn.disabled = false;
         downloadBtn.innerHTML = "DOWNLOAD";
         downloadBtn.className = "btn btn-primary";
+        downloadBtn.setAttribute("data-overwrite", "false");
         downloadBtn.removeAttribute("data-active-download");
         downloadBtn.removeAttribute("data-torrent-id");
         downloadBtn.removeAttribute("data-normal-text");
@@ -816,13 +836,9 @@ function renderSearchResults() {
     downloadBtn.addEventListener("click", () => {
       if (downloadBtn.getAttribute("data-active-download") === "true") {
         const torboxId = downloadBtn.getAttribute("data-torrent-id");
-        const isDelete = downloadBtn.textContent === "DELETE";
-        const confirmMsg = isDelete
-          ? "Are you sure you want to delete this downloaded item and all its files from the server?"
-          : "Are you sure you want to cancel this transfer and delete any files from the server?";
-        if (confirm(confirmMsg)) {
+        if (confirm("Are you sure you want to cancel this transfer and delete any incomplete files?")) {
           downloadBtn.disabled = true;
-          downloadBtn.textContent = isDelete ? "DELETING..." : "ABORTING...";
+          downloadBtn.textContent = "ABORTING...";
           cancelDownload(torboxId);
         }
         return;
@@ -830,6 +846,7 @@ function renderSearchResults() {
       
       const dlIdx = parseInt(selectEl.value);
       const selectedDl = downloads[dlIdx];
+      const isOverwrite = downloadBtn.getAttribute("data-overwrite") === "true";
       
       triggerDownload(
         selectedDl.download_url,
@@ -840,7 +857,8 @@ function renderSearchResults() {
         selectedDl.season,
         selectedDl.episode,
         selectedDl.size,
-        downloadBtn
+        downloadBtn,
+        isOverwrite
       );
     });
   });
@@ -1502,7 +1520,7 @@ function renderAdminContent() {
       <div id="admin-users-section" style="display: ${showUsersDisplay};">
         <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;">
           <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin: 0;">User Accounts & Approvals</h3>
-          <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">• Auto-sorted by Recent Activity</span>
+          <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">• Sorted by Recent Activity</span>
         </div>
 
         <!-- Desktop Users Table -->

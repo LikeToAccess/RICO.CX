@@ -857,9 +857,14 @@ def get_library_file_sizes(library_root: str) -> Set[int]:
 
 
 def populate_all_cards_downloads(cards: List[Dict[str, Any]], file_sizes: Set[int], db: Database) -> None:
-	"""Populates the download state for all search result cards in a single batch database query."""
+	"""Populates the download state and database existence for all search result cards in a single batch database query."""
 	all_magnets: List[str] = []
+	all_clean_titles: Set[str] = set()
+
 	for card in cards:
+		clean_t = (card.get("clean_title") or "").strip().lower()
+		if clean_t:
+			all_clean_titles.add(clean_t)
 		for dl in card.get("downloads", []):
 			magnet = dl.get("download_url")
 			if magnet:
@@ -869,22 +874,59 @@ def populate_all_cards_downloads(cards: List[Dict[str, Any]], file_sizes: Set[in
 	if all_magnets:
 		# Batch query all magnets in one trip
 		placeholders = ",".join("?" for _ in all_magnets)
-		query_sql = f"SELECT magnet, torbox_id, user_id, status FROM downloads WHERE magnet IN ({placeholders})"
+		query_sql = f"SELECT magnet, torbox_id, user_id, status, filename, size FROM downloads WHERE magnet IN ({placeholders})"
 		rows = db.query(query_sql, tuple(all_magnets)) or []
 		for r in rows:
 			dl_map[r["magnet"]] = r
 
+	title_db_map: Dict[str, Any] = {}
+	if all_clean_titles:
+		# Also query completed/active downloads by clean title
+		title_placeholders = ",".join("?" for _ in all_clean_titles)
+		title_query = f"SELECT id, title, filename, size, status, category, created_at FROM downloads WHERE LOWER(title) IN ({title_placeholders}) AND status IN ('completed', 'downloading', 'moving')"
+		title_rows = db.query(title_query, tuple(all_clean_titles)) or []
+		for tr in title_rows:
+			clean_k = (tr["title"] or "").strip().lower()
+			if clean_k not in title_db_map or tr["status"] == "completed":
+				title_db_map[clean_k] = tr
+
 	for card in cards:
+		clean_t = (card.get("clean_title") or "").strip().lower()
+		card_db_rec = title_db_map.get(clean_t)
+		card_has_db = False
+		card_existing_info: Dict[str, Any] = {}
+
+		if card_db_rec:
+			card_has_db = True
+			card_existing_info = {
+				"title": card_db_rec["title"],
+				"filename": card_db_rec["filename"],
+				"size": card_db_rec["size"],
+				"status": card_db_rec["status"]
+			}
+
 		for dl in card.get("downloads", []):
-			dl["downloaded"] = dl.get("size", 0) in file_sizes
+			is_downloaded = dl.get("size", 0) in file_sizes
 			rec = dl_map.get(dl.get("download_url"))
 			if rec:
 				dl["torbox_id"] = rec["torbox_id"]
 				dl["user_id"] = rec["user_id"]
 				dl["db_status"] = rec["status"]
+				dl["in_database"] = True
+				if rec["status"] == "completed":
+					is_downloaded = True
+				card_has_db = True
 			else:
 				dl["torbox_id"] = None
 				dl["user_id"] = None
+				dl["db_status"] = None
+				dl["in_database"] = is_downloaded
+
+			dl["downloaded"] = is_downloaded
+
+		card["in_database"] = card_has_db
+		if card_has_db and card_existing_info:
+			card["existing_download"] = card_existing_info
 # HEALTH CHECK ENDPOINT (Public unauthenticated endpoint for monitoring)
 @api_bp.route('/health', methods=['GET'])
 def health():
@@ -1034,7 +1076,8 @@ def download():
 	library_root = os.path.abspath(library_root)
 	file_sizes = get_library_file_sizes(library_root)
 
-	if size > 0 and size in file_sizes:
+	force_overwrite = bool(data.get('overwrite', False))
+	if not force_overwrite and size > 0 and size in file_sizes:
 		logger.info(f"Preventive skip: File with size {size} already exists in library. Marking completed.")
 		db = Database()
 		skipped_id = f"skipped_{int(time.time())}"

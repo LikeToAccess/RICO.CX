@@ -360,6 +360,25 @@ select.form-input {
   text-transform: uppercase;
 }
 
+.media-in-db-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  background-color: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.media-card.in-database {
+  border-left: 3px solid rgba(56, 189, 248, 0.6);
+}
+
 .media-meta-line {
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -387,6 +406,20 @@ select.form-input {
   background-color: transparent;
   border: 1px dashed var(--border-color);
   color: var(--text-secondary);
+}
+
+.tag-badge.tag-badge-in-db {
+  border-style: solid;
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.08);
+}
+
+.tag-badge.tag-badge-alt-version {
+  border-style: dashed;
+  border-color: rgba(251, 146, 60, 0.4);
+  color: #fb923c;
+  background-color: rgba(251, 146, 60, 0.05);
 }
 
 .media-card-actions {

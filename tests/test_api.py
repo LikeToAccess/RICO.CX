@@ -434,11 +434,14 @@ class TestAPI(unittest.TestCase):
 
 		populate_all_cards_downloads(cards, {1024}, self.db)
 
+		self.assertTrue(cards[0]["in_database"])
 		self.assertTrue(cards[0]["downloads"][0]["downloaded"])
+		self.assertTrue(cards[0]["downloads"][0]["in_database"])
 		self.assertEqual(cards[0]["downloads"][0]["torbox_id"], "tor_123")
 		self.assertEqual(cards[0]["downloads"][0]["db_status"], "completed")
 
 		self.assertFalse(cards[0]["downloads"][1]["downloaded"])
+		self.assertFalse(cards[0]["downloads"][1]["in_database"])
 		self.assertIsNone(cards[0]["downloads"][1]["torbox_id"])
 
 	def test_health_endpoint(self):
