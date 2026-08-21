@@ -1,8 +1,9 @@
+"""SQLite Database Manager for RICO.CX."""
 import logging
 import os
 import sqlite3
 import threading
-from typing import Any, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Optional, Tuple, Type, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ T = TypeVar("T", bound="Database")
 
 class Database:
 	"""
-	Thread-safe Singleton SQLite Database Manager.
+	Thread-safe Singleton SQLite Database Manager with WAL mode and high-concurrency connection handling.
 	"""
 	_instance: Optional["Database"] = None
 	_lock = threading.Lock()
@@ -35,14 +36,21 @@ class Database:
 			cls._instance = None
 
 	def _get_conn(self) -> sqlite3.Connection:
-		conn = sqlite3.connect(self.db_path, check_same_thread=False)
+		conn = sqlite3.connect(self.db_path, timeout=30.0, check_same_thread=False)
 		conn.row_factory = sqlite3.Row
 		conn.execute("PRAGMA foreign_keys = ON")
+		conn.execute("PRAGMA busy_timeout = 30000")
 		return conn
 
 	def _init_db(self) -> None:
 		conn = self._get_conn()
 		cursor = conn.cursor()
+
+		try:
+			cursor.execute("PRAGMA journal_mode = WAL")
+			cursor.execute("PRAGMA synchronous = NORMAL")
+		except Exception as exc:  # pylint: disable=broad-exception-caught
+			logger.warning("Database: Failed to set WAL mode: %s", exc)
 
 		current_dir = os.path.dirname(os.path.abspath(__file__))
 		schema_path = os.path.abspath(os.path.join(current_dir, "../schema.sql"))

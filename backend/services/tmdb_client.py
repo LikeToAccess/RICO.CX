@@ -225,9 +225,16 @@ class TmdbClient:
 				logger.debug("Parallel TMDb resolution failed for %s: %s", getattr(card, 'clean_title', ''), e)
 
 		# Use bounded thread pool for low latency concurrent resolution
-		max_workers = min(len(cards_to_resolve), 8)
-		with ThreadPoolExecutor(max_workers=max_workers) as executor:
-			list(executor.map(_worker, cards_to_resolve))
+		if len(cards_to_resolve) == 1:
+			_worker(cards_to_resolve[0])
+			return
+
+		try:
+			max_workers = min(len(cards_to_resolve), 8)
+			with ThreadPoolExecutor(max_workers=max_workers) as executor:
+				list(executor.map(_worker, cards_to_resolve))
+		except Exception as exc:  # pylint: disable=broad-exception-caught
+			logger.error("Batch TMDb resolution error: %s", exc)
 
 	def get_tv_seasons(self, tv_id: int) -> List[int]:
 		"""Returns a sorted list of valid season numbers for a given TV show ID on TMDB."""

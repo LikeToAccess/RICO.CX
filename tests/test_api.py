@@ -441,6 +441,28 @@ class TestAPI(unittest.TestCase):
 		self.assertFalse(cards[0]["downloads"][1]["downloaded"])
 		self.assertIsNone(cards[0]["downloads"][1]["torbox_id"])
 
+	def test_health_endpoint(self):
+		# Health check must be publicly accessible without login
+		response = self.client.get('/api/health')
+		self.assertEqual(response.status_code, 200)
+		data = json.loads(response.data)
+		self.assertEqual(data.get("status"), "healthy")
+		self.assertEqual(data.get("service"), "rico.cx")
+		self.assertIn("timestamp", data)
+
+	@patch('requests.post')
+	def test_send_ha_notification(self, mock_post):
+		from backend.routes.api import send_ha_notification
+		mock_resp = MagicMock()
+		mock_resp.status_code = 200
+		mock_post.return_value = mock_resp
+
+		send_ha_notification("test_crash", {"details": "test error"})
+		mock_post.assert_called_once()
+		args, kwargs = mock_post.call_args
+		self.assertIn("https://haos.rc2.rico.cx/api/webhook/rico_cx_crash_alert", args[0])
+		self.assertEqual(kwargs["json"]["event"], "test_crash")
+
 
 if __name__ == '__main__':
 	unittest.main()

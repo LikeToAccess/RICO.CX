@@ -1,3 +1,4 @@
+import datetime
 import logging
 import os
 import re
@@ -507,12 +508,6 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 
 							with open(temp_dest_path, open_mode) as f_out:
 								for chunk in resp.iter_content(chunk_size=1024*1024):
-									exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
-									if not exists:
-										logger.info(f"Download {db_download_id} was cancelled during transfer stream. Aborting.")
-										local_transfer_success = False
-										break
-
 									if chunk:
 										f_out.write(chunk)
 										current_file_downloaded += len(chunk)
@@ -534,6 +529,12 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 										overall_progress = int((overall_bytes / total_files_size) * 100) if total_files_size > 0 else 0
 
 										if now_f - last_file_emit > 1:
+											exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
+											if not exists:
+												logger.info(f"Download {db_download_id} was cancelled during transfer stream. Aborting.")
+												local_transfer_success = False
+												break
+
 											moving_status = f"Moving file {idx+1}/{len(video_files)}"
 											db.execute(
 												"UPDATE downloads SET status = ?, progress = ?, speed = ?, size = ? WHERE id = ?",
@@ -878,7 +879,15 @@ def populate_all_cards_downloads(cards: List[Dict[str, Any]], file_sizes: Set[in
 			else:
 				dl["torbox_id"] = None
 				dl["user_id"] = None
-				dl["db_status"] = None
+# HEALTH CHECK ENDPOINT (Public unauthenticated endpoint for monitoring)
+@api_bp.route('/health', methods=['GET'])
+def health():
+	"""Public lightweight health check endpoint returning server status."""
+	return jsonify({
+		"status": "healthy",
+		"service": "rico.cx",
+		"timestamp": time.time()
+	}), 200
 
 
 # SEARCH ENDPOINT
@@ -1570,6 +1579,23 @@ def start_bg_task(target, *args, **kwargs):
 		t.start()
 
 
+def send_ha_notification(event_type: str, details: Optional[Dict[str, Any]] = None) -> None:
+	"""
+	Sends an automated crash / respawn notification webhook to Home Assistant.
+	"""
+	ha_webhook_url = os.environ.get("HA_WEBHOOK_URL") or "https://haos.rc2.rico.cx/api/webhook/rico_cx_crash_alert"
+	payload = {
+		"event": event_type,
+		"timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+		"server": "island.rico.cx",
+		"details": details or {}
+	}
+	try:
+		requests.post(ha_webhook_url, json=payload, timeout=5)
+	except Exception as exc:  # pylint: disable=broad-exception-caught
+		logger.debug("Failed to dispatch Home Assistant alert webhook: %s", exc)
+
+
 def init_download_resumption():
 	"""
 	Startup recovery task: Automatically resumes any downloads interrupted by server crash or restart.
@@ -1594,6 +1620,7 @@ def init_download_resumption():
 			logger.info("Startup Recovery: No incomplete downloads found.")
 			return
 		logger.info(f"Startup Recovery: Found {len(rows)} incomplete downloads to evaluate.")
+		send_ha_notification("server_restart_with_resumption", {"resumed_count": len(rows)})
 		for r in rows:
 			torbox_id = r["torbox_id"]
 			if not torbox_id or str(torbox_id).startswith("skipped_") or str(torbox_id).startswith("legacy_"):
