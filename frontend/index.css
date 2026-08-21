@@ -818,8 +818,17 @@ select.form-input {
 }
 
 .admin-stat-icon {
-  font-size: 1.1rem;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  opacity: 0.85;
+}
+
+.admin-stat-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
 }
 
 .admin-stat-value {

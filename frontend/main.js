@@ -1379,7 +1379,10 @@ function renderAdminContent() {
           <h2>ADMINISTRATION PANEL</h2>
           <p style="color: var(--text-secondary); margin-bottom: 0;">System telemetry, user management, and server orchestration.</p>
         </div>
-        <button id="btn-refresh-admin-all" class="btn" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 0;">🔄 Refresh Overview</button>
+        <button id="btn-refresh-admin-all" class="btn" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 0; display: inline-flex; align-items: center; gap: 0.4rem;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          <span>Refresh Overview</span>
+        </button>
       </div>
 
       <!-- Real-time KPI Stats Grid -->
@@ -1387,7 +1390,9 @@ function renderAdminContent() {
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span>Database Size</span>
-            <span class="admin-stat-icon">💾</span>
+            <span class="admin-stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            </span>
           </div>
           <div id="stat-db-size" class="admin-stat-value">Loading...</div>
           <div id="stat-db-sub" class="admin-stat-sub">SQLite (WAL Mode)</div>
@@ -1395,7 +1400,9 @@ function renderAdminContent() {
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span>Library Storage</span>
-            <span class="admin-stat-icon">🗄️</span>
+            <span class="admin-stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+            </span>
           </div>
           <div id="stat-storage-size" class="admin-stat-value">Loading...</div>
           <div id="stat-storage-sub" class="admin-stat-sub">Library Mount</div>
@@ -1403,7 +1410,9 @@ function renderAdminContent() {
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span>Total Downloads</span>
-            <span class="admin-stat-icon">📥</span>
+            <span class="admin-stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </span>
           </div>
           <div id="stat-dl-count" class="admin-stat-value">Loading...</div>
           <div id="stat-dl-sub" class="admin-stat-sub">Tracked Releases</div>
@@ -1411,7 +1420,9 @@ function renderAdminContent() {
         <div class="admin-stat-card">
           <div class="admin-stat-header">
             <span>User Accounts</span>
-            <span class="admin-stat-icon">👥</span>
+            <span class="admin-stat-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            </span>
           </div>
           <div id="stat-user-count" class="admin-stat-value">Loading...</div>
           <div id="stat-user-sub" class="admin-stat-sub">System Users</div>
