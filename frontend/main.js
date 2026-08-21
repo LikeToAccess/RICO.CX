@@ -165,6 +165,7 @@ function navigate(view, pushState = true) {
   mainContentEl.classList.add("animate-fade");
   
   if (view === "dashboard") {
+    stopAdminSync();
     mainContentEl.innerHTML = renderDashboardContent();
     setupDashboardContentListeners();
     renderSearchResults(); // Draw any existing search results
@@ -175,6 +176,7 @@ function navigate(view, pushState = true) {
   } else if (view === "admin") {
     const isAdminOrMod = state.user && (state.user.group_name === "Admin" || state.user.group_name === "Moderator");
     if (!isAdminOrMod) {
+      stopAdminSync();
       navigate("dashboard", pushState);
       return;
     }
@@ -183,6 +185,7 @@ function navigate(view, pushState = true) {
     }
     mainContentEl.innerHTML = renderAdminContent();
     setupAdminContentListeners();
+    startAdminSync();
     if (pushState && window.location.pathname !== "/admin") {
       history.pushState({ view }, "", "/admin");
     }
@@ -967,10 +970,20 @@ function updateDownloadProgressUI(data) {
   // Update admin downloads table if visible
   const adminStatusEl = document.getElementById(`admin-dl-status-${torrentId}`);
   if (adminStatusEl) {
-    const statusClass = getStatusClass(status);
+    const statusLower = (status || "").toLowerCase();
+    const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded");
+    const isFailed = statusLower.includes("failed") || statusLower.includes("error") || statusLower.includes("stalled") || statusLower.includes("paused") || statusLower.includes("interrupted");
+    const isDownloading = statusLower.includes("downloading") || statusLower.includes("moving");
+
+    let badgeClass = "badge-queued";
+    if (isCompleted) badgeClass = "badge-completed";
+    else if (isDownloading) badgeClass = "badge-downloading";
+    else if (isFailed) badgeClass = "badge-failed";
+
     const progressText = progress !== undefined ? `${progress}%` : "0%";
-    adminStatusEl.className = `dl-item-status dl-status-${statusClass}`;
-    adminStatusEl.innerHTML = `${status.toUpperCase()} (${progressText})`;
+    const speedText = speed && speed > 0 ? ` • ${formatSpeed(speed)}` : "";
+    adminStatusEl.className = `admin-badge ${badgeClass}`;
+    adminStatusEl.innerHTML = `${escapeHtml(status.toUpperCase())} (${escapeHtml(progressText)}${speedText})`;
     
     const adminSizeEl = document.getElementById(`admin-dl-size-${torrentId}`);
     if (adminSizeEl && size) {
@@ -979,24 +992,20 @@ function updateDownloadProgressUI(data) {
     
     const adminBtnEl = document.getElementById(`admin-dl-btn-${torrentId}`);
     if (adminBtnEl) {
-      const statusLower = (status || "").toLowerCase();
-      const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded");
-      const isFailed = statusLower.includes("failed") || statusLower.includes("error") || statusLower.includes("stalled") || statusLower.includes("paused") || statusLower.includes("interrupted");
       let btnHtml = "";
-      
       const isAdmin = state.user && state.user.group_name === "Admin";
       const canControl = isAdmin || isOwner;
       if (canControl) {
         if (isCompleted) {
-          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">DELETE</button>`;
+          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${torrentId}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0;">DELETE</button>`;
         } else if (isFailed) {
-          btnHtml = `<button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0; margin-right: 4px;">RESUME</button>` +
-                    `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CLEAR</button>`;
+          btnHtml = `<button class="btn btn-secondary btn-admin-action" data-action="resume" data-torbox-id="${torrentId}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0; margin-right: 4px;">RESUME</button>` +
+                    `<button class="btn btn-danger btn-admin-action" data-action="delete" data-torbox-id="${torrentId}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0;">CLEAR</button>`;
         } else {
-          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${torrentId}" style="padding: 0.15rem 0.4rem; font-size: 0.65rem; height: 24px; line-height: 1; border-radius: 0;">CANCEL</button>`;
+          btnHtml = `<button class="btn btn-danger btn-admin-action" data-action="cancel" data-torbox-id="${torrentId}" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; height: 28px; border-radius: 0;">CANCEL</button>`;
         }
       } else {
-        btnHtml = `<span style="font-size: 0.65rem; color: var(--text-muted); font-style: italic;">No Access</span>`;
+        btnHtml = `<span style="font-size: 0.7rem; color: var(--text-muted); font-style: italic;">No Access</span>`;
       }
       adminBtnEl.innerHTML = btnHtml;
     }
@@ -1374,15 +1383,9 @@ function renderAdminContent() {
 
   return `
     <div class="settings-box animate-slide">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.5rem;">
-        <div>
-          <h2>ADMINISTRATION PANEL</h2>
-          <p style="color: var(--text-secondary); margin-bottom: 0;">System telemetry, user management, and server orchestration.</p>
-        </div>
-        <button id="btn-refresh-admin-all" class="btn" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; border-radius: 0; display: inline-flex; align-items: center; gap: 0.4rem;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-          <span>Refresh Overview</span>
-        </button>
+      <div style="margin-bottom: 1.5rem;">
+        <h2>ADMINISTRATION PANEL</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 0;">System telemetry, user management, and server orchestration.</p>
       </div>
 
       <!-- Real-time KPI Stats Grid -->
@@ -1465,9 +1468,9 @@ function renderAdminContent() {
           </div>
         </div>
 
-        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">System Torrent Queue</h3>
-          <button id="btn-refresh-downloads" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 0;">Refresh</button>
+        <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;">
+          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin: 0;">System Torrent Queue</h3>
+          <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">• Real-time Live Sync</span>
         </div>
 
         <!-- Desktop Downloads Table -->
@@ -1497,9 +1500,9 @@ function renderAdminContent() {
 
       <!-- Tab Content: Users -->
       <div id="admin-users-section" style="display: ${showUsersDisplay};">
-        <div style="margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;">
-          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600;">User Accounts & Approvals</h3>
-          <button id="btn-refresh-users" class="btn" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border-radius: 0;">Refresh</button>
+        <div style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem;">
+          <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); font-weight: 600; margin: 0;">User Accounts & Approvals</h3>
+          <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">• Auto-sorted by Recent Activity</span>
         </div>
 
         <!-- Desktop Users Table -->
@@ -1563,6 +1566,30 @@ function renderAdminContent() {
       </div>
     </div>
   `;
+}
+
+let adminSyncTimer = null;
+
+function startAdminSync() {
+  stopAdminSync();
+  fetchAdminStats();
+  adminSyncTimer = setInterval(() => {
+    if (state.currentView === "admin") {
+      fetchAdminStats();
+      if (state.adminActiveTab === "downloads") {
+        fetchAdminDownloads();
+      }
+    } else {
+      stopAdminSync();
+    }
+  }, 5000);
+}
+
+function stopAdminSync() {
+  if (adminSyncTimer) {
+    clearInterval(adminSyncTimer);
+    adminSyncTimer = null;
+  }
 }
 
 async function fetchAdminStats() {
@@ -1702,32 +1729,6 @@ function setupAdminContentListeners() {
       
       state.adminActiveTab = "settings";
       fetchServerSettings();
-      fetchAdminStats();
-    });
-  }
-
-  const refreshOverviewBtn = document.getElementById("btn-refresh-admin-all");
-  if (refreshOverviewBtn) {
-    refreshOverviewBtn.addEventListener("click", () => {
-      fetchAdminStats();
-      if (state.adminActiveTab === "users") fetchAdminUsers();
-      else if (state.adminActiveTab === "downloads") fetchAdminDownloads();
-      else if (state.adminActiveTab === "settings") fetchServerSettings();
-    });
-  }
-  
-  const refreshUsersBtn = document.getElementById("btn-refresh-users");
-  if (refreshUsersBtn) {
-    refreshUsersBtn.addEventListener("click", () => {
-      fetchAdminUsers();
-      fetchAdminStats();
-    });
-  }
-  
-  const refreshDownloadsBtn = document.getElementById("btn-refresh-downloads");
-  if (refreshDownloadsBtn) {
-    refreshDownloadsBtn.addEventListener("click", () => {
-      fetchAdminDownloads();
       fetchAdminStats();
     });
   }
@@ -2307,6 +2308,7 @@ async function updateAdminUserRole(userId, groupName) {
     });
     if (resp.ok) {
       fetchAdminUsers();
+      fetchAdminStats();
     } else {
       const err = await resp.json();
       alert(`Failed to update role: ${err.error}`);
@@ -2333,6 +2335,7 @@ async function deleteAdminUser(userId) {
     });
     if (resp.ok) {
       fetchAdminUsers();
+      fetchAdminStats();
     } else {
       const err = await resp.json();
       alert(`Failed to delete user: ${err.error}`);
@@ -2386,7 +2389,12 @@ function handleDownloadAddedSocket(data) {
   }
   
   if (state.currentView === "admin") {
-    fetchAdminDownloads();
+    fetchAdminStats();
+    if (state.adminActiveTab === "downloads") {
+      fetchAdminDownloads();
+    } else if (state.adminActiveTab === "users") {
+      fetchAdminUsers();
+    }
   }
 }
 
@@ -2410,10 +2418,17 @@ function handleDownloadDeletedSocket(data) {
     adminRowEl.remove();
     const adminListEl = document.getElementById("admin-downloads-list");
     if (adminListEl && !adminListEl.querySelector("tr")) {
-      adminListEl.innerHTML = `<tr><td colspan="5" class="empty-state" style="padding: 2rem;">No system downloads found.</td></tr>`;
+      adminListEl.innerHTML = `<tr><td colspan="6" class="empty-state" style="padding: 2rem;">No system downloads found.</td></tr>`;
     }
   }
   
   updateSidebarBadge();
   updateSearchResultButtons();
+
+  if (state.currentView === "admin") {
+    fetchAdminStats();
+    if (state.adminActiveTab === "users") {
+      fetchAdminUsers();
+    }
+  }
 }
