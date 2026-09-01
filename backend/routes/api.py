@@ -26,6 +26,8 @@ ACTIVE_DOWNLOAD_TASKS: Set[Tuple[int, str]] = set()
 ACTIVE_TASKS_LOCK = threading.Lock()
 _RESUMPTION_INITIALIZED = False
 _RESUMPTION_LOCK = threading.Lock()
+MAX_CONCURRENT_LOCAL_TRANSFERS = 2
+LOCAL_TRANSFER_SEMAPHORE = threading.Semaphore(MAX_CONCURRENT_LOCAL_TRANSFERS)
 
 def get_server_settings():
 	db = Database()
@@ -178,7 +180,7 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 
 			# Throttle websocket emits and persist live state in database
 			now = time.time()
-			if now - last_emit_time > 1:
+			if now - last_emit_time >= 1.5:
 				db.execute(
 					"UPDATE downloads SET status = ?, progress = ?, speed = ?, size = ? WHERE id = ?",
 					(status_str, progress, speed, size, db_download_id)
@@ -195,11 +197,6 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 					'user_id': user_id
 				})
 				last_emit_time = now
-
-			db.execute(
-				"UPDATE downloads SET status = ?, progress = ?, speed = ?, size = ? WHERE id = ?",
-				(db_status, progress, speed, size, db_download_id)
-			)
 
 			# Complete on Torbox?
 			if state in ("completed", "cached", "uploading") or progress >= 100 or info.get("download_finished"):
@@ -275,6 +272,12 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 				title_clean = parsed_torrent.clean_title or metadata.get("title", "Unknown")
 				category = metadata.get("category", "movie")
 				year = parsed_torrent.year or metadata.get("year")
+
+				if category == "movie" and len(video_files) > 1:
+					# For movies, select only the main feature film to prevent extra featurettes from overwriting the file
+					largest_movie_file = max(video_files, key=lambda x: x.get("size", 0))
+					video_files = [largest_movie_file]
+					total_files_size = sum(f.get("size", 0) for f in video_files)
 
 				tmdb_id = None
 				official_title = title_clean
@@ -414,183 +417,202 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 					transfer_done = False
 					start_time = time.time()
 
-					for attempt in range(1, MAX_RETRIES + 1):
-						# Check if cancelled/deleted from database
-						exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
-						if not exists:
-							logger.info(f"Download {db_download_id} was cancelled during transfer. Aborting and cleaning up.")
-							local_transfer_success = False
-							break
-
-						# Refresh download link on retries in case token expired
-						if attempt > 1:
-							fresh_link = torbox.get_download_link(torbox_id, file_id)
-							if fresh_link:
-								dl_link = fresh_link
-
-						# If attempt 1 failed, corrupt resume, or attempt > 1: force fresh overwrite from byte 0
-						if attempt > 1:
-							if os.path.exists(temp_dest_path):
-								try:
-									os.remove(temp_dest_path)
-								except Exception:
-									pass
-							existing_bytes = 0
-						else:
-							existing_bytes = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
-
-						if file_size > 0 and existing_bytes == file_size:
-							logger.info(f"Local file transfer already complete ({existing_bytes} bytes).")
-							transfer_done = True
-							break
-
-						if file_size > 0 and existing_bytes > file_size:
-							logger.warning(f"Existing file size ({existing_bytes} bytes) exceeds target size ({file_size} bytes). Resetting {temp_dest_path}.")
-							try:
-								os.remove(temp_dest_path)
-							except Exception:
-								pass
-							existing_bytes = 0
-
-						headers = {
-							"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-						}
-						if existing_bytes > 0:
-							headers["Range"] = f"bytes={existing_bytes}-"
-							logger.info(f"Resuming transfer for {file_name} from byte {existing_bytes} (Attempt {attempt}/{MAX_RETRIES})...")
-						else:
-							if attempt > 1:
-								logger.info(f"Fallback to fresh redownload for {file_name} from start (Attempt {attempt}/{MAX_RETRIES})...")
-
-						try:
-							resp = requests.get(dl_link, headers=headers, stream=True, timeout=(15, 600))
-
-							# Extract authoritative total file size from response headers if available
-							content_range = resp.headers.get("Content-Range")
-							content_length = resp.headers.get("Content-Length")
-							if content_range and type(content_range).__name__ not in ('MagicMock', 'Mock'):
-								try:
-									header_total = int(str(content_range).split('/')[-1])
-									if header_total > 0:
-										file_size = header_total
-								except Exception:
-									pass
-							elif resp.status_code == 200 and content_length and type(content_length).__name__ not in ('MagicMock', 'Mock'):
-								try:
-									header_total = int(str(content_length))
-									if header_total > 0:
-										file_size = header_total
-								except Exception:
-									pass
-
-							if resp.status_code == 206:
-								open_mode = "ab"
-								current_file_downloaded = existing_bytes
-							elif resp.status_code in (200, 203):
-								open_mode = "wb"
-								current_file_downloaded = 0
-							elif resp.status_code == 416: # Range Not Satisfiable
-								if file_size > 0 and existing_bytes >= file_size:
-									transfer_done = True
-									break
-								open_mode = "wb"
-								current_file_downloaded = 0
-								if os.path.exists(temp_dest_path):
-									os.remove(temp_dest_path)
-							else:
-								resp.raise_for_status()
-								open_mode = "wb"
-								current_file_downloaded = 0
-
-							last_file_emit = 0
-							speed_samples = deque()  # Stores (timestamp, bytes_downloaded) for 5s sliding window
-							speed_samples.append((time.time(), current_file_downloaded))
-
-							with open(temp_dest_path, open_mode) as f_out:
-								for chunk in resp.iter_content(chunk_size=1024*1024):
-									if chunk:
-										f_out.write(chunk)
-										current_file_downloaded += len(chunk)
-										now_f = time.time()
-
-										# 5-second sliding window speed calculation
-										speed_samples.append((now_f, current_file_downloaded))
-										while speed_samples and (now_f - speed_samples[0][0]) > 5.0:
-											speed_samples.popleft()
-
-										if len(speed_samples) > 1:
-											time_diff = speed_samples[-1][0] - speed_samples[0][0]
-											bytes_diff = speed_samples[-1][1] - speed_samples[0][1]
-											current_speed = bytes_diff / time_diff if time_diff > 0 else 0
-										else:
-											current_speed = 0
-
-										overall_bytes = total_downloaded + current_file_downloaded
-										overall_progress = int((overall_bytes / total_files_size) * 100) if total_files_size > 0 else 0
-
-										if now_f - last_file_emit > 1:
-											exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
-											if not exists:
-												logger.info(f"Download {db_download_id} was cancelled during transfer stream. Aborting.")
-												local_transfer_success = False
-												break
-
-											moving_status = f"Moving file {idx+1}/{len(video_files)}"
-											db.execute(
-												"UPDATE downloads SET status = ?, progress = ?, speed = ?, size = ? WHERE id = ?",
-												(moving_status, overall_progress, current_speed, total_files_size, db_download_id)
-											)
-											socketio.emit('download_progress', {
-												'id': torbox_id,
-												'title': metadata.get('title'),
-												'filename': metadata.get('filename'),
-												'magnet': metadata.get('magnet'),
-												'status': moving_status,
-												'progress': overall_progress,
-												'speed': current_speed,
-												'size': total_files_size,
-												'user_id': user_id
-											})
-											last_file_emit = now_f
-
+					with LOCAL_TRANSFER_SEMAPHORE:
+						for attempt in range(1, MAX_RETRIES + 1):
+							# Check if cancelled/deleted from database
+							exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
 							if not exists:
+								logger.info(f"Download {db_download_id} was cancelled during transfer. Aborting and cleaning up.")
 								local_transfer_success = False
 								break
 
-							actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
-							if file_size > 0 and actual_size == file_size:
-								transfer_done = True
-								break
-							elif file_size == 0 and actual_size > 0:
-								transfer_done = True
-								break
+							# Refresh download link on retries in case token expired
+							if attempt > 1:
+								fresh_link = torbox.get_download_link(torbox_id, file_id)
+								if fresh_link:
+									dl_link = fresh_link
+
+							# If attempt 1 failed, corrupt resume, or attempt > 1: force fresh overwrite from byte 0
+							if attempt > 1:
+								if os.path.exists(temp_dest_path):
+									try:
+										os.remove(temp_dest_path)
+									except Exception:
+										pass
+								existing_bytes = 0
 							else:
-								logger.warning(f"Transfer incomplete for {file_name}: got {actual_size}/{file_size} bytes. Falling back to fresh overwrite (Attempt {attempt}/{MAX_RETRIES})...")
+								existing_bytes = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
 
-						except Exception as ex:
-							actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
-							logger.error(f"Local Transfer connection error for {file_name} at {actual_size}/{file_size} bytes: {ex}. Retrying...")
+							if file_size > 0 and existing_bytes == file_size:
+								logger.info(f"Local file transfer already complete ({existing_bytes} bytes).")
+								transfer_done = True
+								break
 
-					if not exists:
-						break
+							if file_size > 0 and existing_bytes > file_size:
+								logger.warning(f"Existing file size ({existing_bytes} bytes) exceeds target size ({file_size} bytes). Resetting {temp_dest_path}.")
+								try:
+									os.remove(temp_dest_path)
+								except Exception:
+									pass
+								existing_bytes = 0
 
-					if transfer_done and os.path.exists(temp_dest_path):
-						final_size = os.path.getsize(temp_dest_path)
-						if file_size == 0 or final_size == file_size:
-							logger.info(f"File verification successful (exact size match: {final_size} bytes). Renaming to final destination: {dest_path}")
-							if os.path.exists(dest_path):
-								os.remove(dest_path)
-							os.rename(temp_dest_path, dest_path)
-							total_downloaded += final_size
-							logger.info(f"Local Transfer complete for file: {file_name}")
+							headers = {
+								"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+							}
+							if existing_bytes > 0:
+								headers["Range"] = f"bytes={existing_bytes}-"
+								logger.info(f"Resuming transfer for {file_name} from byte {existing_bytes} (Attempt {attempt}/{MAX_RETRIES})...")
+							else:
+								if attempt > 1:
+									logger.info(f"Fallback to fresh redownload for {file_name} from start (Attempt {attempt}/{MAX_RETRIES})...")
+
+							try:
+								resp = requests.get(dl_link, headers=headers, stream=True, timeout=(15, 600))
+
+								# Extract authoritative total file size from response headers if available
+								content_range = resp.headers.get("Content-Range")
+								content_length = resp.headers.get("Content-Length")
+								if content_range and type(content_range).__name__ not in ('MagicMock', 'Mock'):
+									try:
+										header_total = int(str(content_range).split('/')[-1])
+										if header_total > 0:
+											file_size = header_total
+									except Exception:
+										pass
+								elif resp.status_code == 200 and content_length and type(content_length).__name__ not in ('MagicMock', 'Mock'):
+									try:
+										header_total = int(str(content_length))
+										if header_total > 0:
+											file_size = header_total
+									except Exception:
+										pass
+
+								if resp.status_code == 206:
+									open_mode = "ab"
+									current_file_downloaded = existing_bytes
+								elif resp.status_code in (200, 203):
+									open_mode = "wb"
+									current_file_downloaded = 0
+								elif resp.status_code == 416: # Range Not Satisfiable
+									if file_size > 0 and existing_bytes >= file_size:
+										transfer_done = True
+										break
+									open_mode = "wb"
+									current_file_downloaded = 0
+									if os.path.exists(temp_dest_path):
+										os.remove(temp_dest_path)
+								else:
+									resp.raise_for_status()
+									open_mode = "wb"
+									current_file_downloaded = 0
+
+								last_file_emit = 0
+								bytes_since_flush = 0
+								speed_samples = deque()  # Stores (timestamp, bytes_downloaded) for 5s sliding window
+								speed_samples.append((time.time(), current_file_downloaded))
+
+								CHUNK_SIZE = 256 * 1024  # 256KB chunks for smooth I/O without memory bloat
+
+								with open(temp_dest_path, open_mode) as f_out:
+									for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
+										if chunk:
+											f_out.write(chunk)
+											current_file_downloaded += len(chunk)
+											bytes_since_flush += len(chunk)
+											now_f = time.time()
+
+											# Flush every 8MB to prevent dirty page accumulation on NFS/disk
+											if bytes_since_flush >= 8 * 1024 * 1024:
+												try:
+													f_out.flush()
+												except Exception:
+													pass
+												bytes_since_flush = 0
+												# Cooperative yield for gevent / event loop
+												time.sleep(0.001)
+
+											# 5-second sliding window speed calculation
+											speed_samples.append((now_f, current_file_downloaded))
+											while speed_samples and (now_f - speed_samples[0][0]) > 5.0:
+												speed_samples.popleft()
+
+											if len(speed_samples) > 1:
+												time_diff = speed_samples[-1][0] - speed_samples[0][0]
+												bytes_diff = speed_samples[-1][1] - speed_samples[0][1]
+												current_speed = bytes_diff / time_diff if time_diff > 0 else 0
+											else:
+												current_speed = 0
+
+											overall_bytes = total_downloaded + current_file_downloaded
+											overall_progress = int((overall_bytes / total_files_size) * 100) if total_files_size > 0 else 0
+
+											if now_f - last_file_emit >= 1.5:
+												exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
+												if not exists:
+													logger.info(f"Download {db_download_id} was cancelled during transfer stream. Aborting.")
+													local_transfer_success = False
+													break
+
+												moving_status = f"Moving file {idx+1}/{len(video_files)}"
+												try:
+													db.execute(
+														"UPDATE downloads SET status = ?, progress = ?, speed = ?, size = ? WHERE id = ?",
+														(moving_status, overall_progress, current_speed, total_files_size, db_download_id)
+													)
+												except Exception as db_err:
+													logger.warning("Database write error during transfer progress update: %s", db_err)
+
+												socketio.emit('download_progress', {
+													'id': torbox_id,
+													'title': metadata.get('title'),
+													'filename': metadata.get('filename'),
+													'magnet': metadata.get('magnet'),
+													'status': moving_status,
+													'progress': overall_progress,
+													'speed': current_speed,
+													'size': total_files_size,
+													'user_id': user_id
+												})
+												last_file_emit = now_f
+
+								if not exists:
+									local_transfer_success = False
+									break
+
+								actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
+								if file_size > 0 and actual_size == file_size:
+									transfer_done = True
+									break
+								elif file_size == 0 and actual_size > 0:
+									transfer_done = True
+									break
+								else:
+									logger.warning(f"Transfer incomplete for {file_name}: got {actual_size}/{file_size} bytes. Falling back to fresh overwrite (Attempt {attempt}/{MAX_RETRIES})...")
+
+							except Exception as ex:
+								actual_size = os.path.getsize(temp_dest_path) if os.path.exists(temp_dest_path) else 0
+								logger.error(f"Local Transfer connection error for {file_name} at {actual_size}/{file_size} bytes: {ex}. Retrying...")
+
+						if not exists:
+							break
+
+						if transfer_done and os.path.exists(temp_dest_path):
+							final_size = os.path.getsize(temp_dest_path)
+							if file_size == 0 or final_size == file_size:
+								logger.info(f"File verification successful (exact size match: {final_size} bytes). Renaming to final destination: {dest_path}")
+								if os.path.exists(dest_path):
+									os.remove(dest_path)
+								os.rename(temp_dest_path, dest_path)
+								total_downloaded += final_size
+								logger.info(f"Local Transfer complete for file: {file_name}")
+							else:
+								logger.error(f"File size mismatch for {file_name}: expected {file_size} bytes, got {final_size} bytes. Retaining temporary .crdownload suffix.")
+								local_transfer_success = False
+								break
 						else:
-							logger.error(f"File size mismatch for {file_name}: expected {file_size} bytes, got {final_size} bytes. Retaining temporary .crdownload suffix.")
+							logger.error(f"Local Transfer failed after {MAX_RETRIES} attempts for file: {file_name}")
 							local_transfer_success = False
 							break
-					else:
-						logger.error(f"Local Transfer failed after {MAX_RETRIES} attempts for file: {file_name}")
-						local_transfer_success = False
-						break
 
 				# Check if cancelled before finishing
 				exists = db.query("SELECT id FROM downloads WHERE id = ?", (db_download_id,), one=True)
@@ -1789,11 +1811,11 @@ def init_download_resumption():
 	def run_resumption():
 		time.sleep(2)  # Wait for Flask & SocketIO startup to stabilize
 		db = Database()
-		rows = db.query("SELECT * FROM downloads WHERE status NOT IN ('completed')")
+		rows = db.query("SELECT * FROM downloads WHERE status NOT IN ('completed', 'failed') AND (status IN ('queued', 'downloading', 'moving') OR status LIKE 'Moving file%' OR status LIKE 'Downloading%')")
 		if not rows:
-			logger.info("Startup Recovery: No incomplete downloads found.")
+			logger.info("Startup Recovery: No active incomplete downloads found.")
 			return
-		logger.info(f"Startup Recovery: Found {len(rows)} incomplete downloads to evaluate.")
+		logger.info(f"Startup Recovery: Found {len(rows)} active incomplete downloads to evaluate.")
 		send_ha_notification("server_restart_with_resumption", {"resumed_count": len(rows)})
 		for r in rows:
 			torbox_id = r["torbox_id"]
@@ -1823,6 +1845,7 @@ def init_download_resumption():
 				metadata,
 				db_download_id
 			)
+			time.sleep(0.1)  # Stagger background task dispatch
 
 	start_bg_task(run_resumption)
 

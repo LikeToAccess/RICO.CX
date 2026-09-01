@@ -493,6 +493,30 @@ class TestAPI(unittest.TestCase):
 		self.assertEqual(kwargs["json"]["event"], "new_pending_user")
 		self.assertEqual(kwargs["json"]["details"]["username"], "newuser@example.com")
 
+	def test_download_resumption_filtering_and_concurrency(self):
+		from backend.routes.api import LOCAL_TRANSFER_SEMAPHORE, MAX_CONCURRENT_LOCAL_TRANSFERS
+		self.assertEqual(MAX_CONCURRENT_LOCAL_TRANSFERS, 2)
+		self.assertIsNotNone(LOCAL_TRANSFER_SEMAPHORE)
+
+		# Insert completed, failed, and active downloads
+		self.db.execute("INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			(self.user.id, "tb_c", "Done Movie", "done.mkv", "magnet:?", "completed", "movie", 100))
+		self.db.execute("INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			(self.user.id, "tb_f", "Failed Movie", "failed.mkv", "magnet:?", "failed", "movie", 100))
+		self.db.execute("INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			(self.user.id, "tb_q", "Queued Movie", "queued.mkv", "magnet:?", "queued", "movie", 100))
+		self.db.execute("INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			(self.user.id, "tb_m", "Moving Movie", "moving.mkv", "magnet:?", "Moving file 1/1", "movie", 100))
+
+		resumable = self.db.query(
+			"SELECT torbox_id FROM downloads WHERE status NOT IN ('completed', 'failed') AND (status IN ('queued', 'downloading', 'moving') OR status LIKE 'Moving file%' OR status LIKE 'Downloading%')"
+		)
+		resumable_ids = [r["torbox_id"] for r in resumable]
+		self.assertIn("tb_q", resumable_ids)
+		self.assertIn("tb_m", resumable_ids)
+		self.assertNotIn("tb_c", resumable_ids)
+		self.assertNotIn("tb_f", resumable_ids)
+
 
 if __name__ == '__main__':
 	unittest.main()
