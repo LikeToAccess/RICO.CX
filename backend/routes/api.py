@@ -511,7 +511,7 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 								speed_samples = deque()  # Stores (timestamp, bytes_downloaded) for 5s sliding window
 								speed_samples.append((time.time(), current_file_downloaded))
 
-								CHUNK_SIZE = 256 * 1024  # 256KB chunks for smooth I/O without memory bloat
+								CHUNK_SIZE = 1024 * 1024  # 1MB chunks aligned with NFS mount block size
 
 								with open(temp_dest_path, open_mode) as f_out:
 									for chunk in resp.iter_content(chunk_size=CHUNK_SIZE):
