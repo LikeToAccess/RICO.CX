@@ -22,6 +22,37 @@ def clear_tmdb_cache() -> None:
 		_TMDB_CACHE.clear()
 
 
+TMDB_GENRES: Dict[int, str] = {
+	28: "Action",
+	12: "Adventure",
+	16: "Animation",
+	35: "Comedy",
+	80: "Crime",
+	99: "Documentary",
+	18: "Drama",
+	10751: "Family",
+	14: "Fantasy",
+	36: "History",
+	27: "Horror",
+	10402: "Music",
+	9648: "Mystery",
+	10749: "Romance",
+	878: "Sci-Fi",
+	10770: "TV Movie",
+	53: "Thriller",
+	10752: "War",
+	37: "Western",
+	10759: "Action & Adventure",
+	10762: "Kids",
+	10763: "News",
+	10764: "Reality",
+	10765: "Sci-Fi & Fantasy",
+	10766: "Soap",
+	10767: "Talk",
+	10768: "War & Politics",
+}
+
+
 class TmdbClient:
 	"""
 	Client for fetching movie and TV show metadata from The Movie Database (TMDb) API.
@@ -278,3 +309,86 @@ class TmdbClient:
 		except Exception as exc:  # pylint: disable=broad-exception-caught
 			logger.error("TMDB get_episode_name failed for TV ID %s S%dE%d: %s", tv_id, season, episode, exc)
 		return None
+
+	def get_trending(
+		self,
+		media_type: str = "movie",
+		time_window: str = "day",
+		page: int = 1
+	) -> Optional[Dict[str, Any]]:
+		"""
+		Fetches daily or weekly trending movies or TV shows from TMDB.
+		Results are cached in memory for fast repeat access.
+		"""
+		if not self.api_key:
+			return None
+
+		media_type = "tv" if media_type == "tv" else "movie"
+		time_window = "week" if time_window == "week" else "day"
+		page = max(1, page)
+
+		cached = self._get_from_cache("trending", f"{media_type}:{time_window}", page)
+		if cached is not None:
+			return cached[1]
+
+		url = f"{self.base_url}/trending/{media_type}/{time_window}"
+		params: Dict[str, Union[str, int]] = {
+			"api_key": self.api_key,
+			"page": page
+		}
+
+		try:
+			resp = requests.get(url, params=params, timeout=8)
+			resp.raise_for_status()
+			raw_data = resp.json()
+			results: List[Dict[str, Any]] = []
+
+			for item in raw_data.get("results", []):
+				if not isinstance(item, dict):
+					continue
+				is_tv = media_type == "tv" or item.get("media_type") == "tv"
+				raw_title = str(item.get("name" if is_tv else "title") or "")
+				if not raw_title:
+					continue
+
+				date_str = str(item.get("first_air_date" if is_tv else "release_date") or "")
+				year_val: Optional[int] = None
+				if date_str:
+					try:
+						year_val = int(date_str.split("-")[0])
+					except (ValueError, IndexError):
+						year_val = None
+
+				poster_path = item.get("poster_path")
+				poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+				backdrop_path = item.get("backdrop_path")
+				backdrop_url = f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None
+
+				genre_names = [TMDB_GENRES[gid] for gid in item.get("genre_ids", []) if gid in TMDB_GENRES]
+
+				results.append({
+					"id": item.get("id"),
+					"title": raw_title,
+					"clean_title": raw_title,
+					"year": year_val,
+					"is_tv": is_tv,
+					"overview": item.get("overview") or "",
+					"poster_url": poster_url,
+					"backdrop_url": backdrop_url,
+					"vote_average": round(float(item.get("vote_average", 0.0)), 1),
+					"vote_count": item.get("vote_count", 0),
+					"popularity": round(float(item.get("popularity", 0.0)), 1),
+					"genres": genre_names
+				})
+
+			parsed = {
+				"page": raw_data.get("page", 1),
+				"total_pages": raw_data.get("total_pages", 1),
+				"total_results": raw_data.get("total_results", len(results)),
+				"results": results
+			}
+			self._save_to_cache("trending", f"{media_type}:{time_window}", page, parsed)
+			return parsed
+		except Exception as exc:  # pylint: disable=broad-exception-caught
+			logger.error("TMDB get_trending failed: %s", exc)
+			return None

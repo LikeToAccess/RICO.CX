@@ -1181,6 +1181,84 @@ def search():
 	})
 
 
+# TRENDING / POPULAR ENDPOINT
+@api_bp.route('/trending', methods=['GET'])
+@login_required
+def trending():
+	"""
+	Returns daily or weekly trending movies or TV shows from TMDb.
+	Cross-references items with local downloads database to mark 'in_database'.
+	Query params:
+		type: 'movie' (default) or 'tv'
+		window: 'day' (default) or 'week'
+		page: int (default 1)
+	"""
+	media_type = (request.args.get('type') or 'movie').strip().lower()
+	time_window = (request.args.get('window') or 'day').strip().lower()
+	page_str = request.args.get('page', '1')
+
+	try:
+		page = max(1, int(page_str))
+	except (ValueError, TypeError):
+		page = 1
+
+	if media_type not in ('movie', 'tv'):
+		media_type = 'movie'
+	if time_window not in ('day', 'week'):
+		time_window = 'day'
+
+	settings = get_server_settings()
+	tmdb_key = settings.get("tmdb_api_key") or os.environ.get("TMDB_API_KEY", "")
+
+	if not tmdb_key:
+		return jsonify({"error": "TMDb API Key not configured.", "results": []}), 503
+
+	tmdb = TmdbClient(api_key=tmdb_key)
+	trending_data = tmdb.get_trending(media_type=media_type, time_window=time_window, page=page)
+
+	if not trending_data:
+		return jsonify({"error": "Failed to fetch trending media from TMDb.", "results": []}), 502
+
+	results = trending_data.get("results", [])
+
+	# Cross-reference against downloads in database
+	db = Database()
+	completed_downloads = db.query(
+		"SELECT id, title, filename, size, status, category, created_at FROM downloads WHERE status IN ('completed', 'downloading', 'moving')"
+	) or []
+
+	title_db_map: Dict[str, Any] = {}
+	norm_db_map: Dict[str, Any] = {}
+
+	for row in completed_downloads:
+		t_lower = (row["title"] or "").strip().lower()
+		if t_lower and (t_lower not in title_db_map or row["status"] == "completed"):
+			title_db_map[t_lower] = row
+		norm_k = re.sub(r'[^a-z0-9]', '', t_lower)
+		if norm_k and (norm_k not in norm_db_map or row["status"] == "completed"):
+			norm_db_map[norm_k] = row
+
+	for item in results:
+		item_title = (item.get("title") or "").strip().lower()
+		item_norm = re.sub(r'[^a-z0-9]', '', item_title)
+		match = title_db_map.get(item_title) or norm_db_map.get(item_norm)
+
+		if match:
+			item["in_database"] = True
+			item["existing_download"] = {
+				"id": match["id"],
+				"title": match["title"],
+				"filename": match["filename"],
+				"size": match["size"],
+				"status": match["status"]
+			}
+		else:
+			item["in_database"] = False
+			item["existing_download"] = None
+
+	return jsonify(trending_data), 200
+
+
 # DOWNLOAD ENDPOINT
 @api_bp.route('/download', methods=['POST'])
 @login_required

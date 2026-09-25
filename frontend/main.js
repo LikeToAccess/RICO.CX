@@ -106,7 +106,9 @@ function routeByPath(pushState = true) {
     return;
   }
   
-  if (path === "/settings") {
+  if (path === "/popular") {
+    navigate("popular", pushState);
+  } else if (path === "/settings") {
     const isAdmin = state.user.group_name === "Admin";
     if (isAdmin) {
       state.adminActiveTab = "settings";
@@ -125,6 +127,15 @@ function routeByPath(pushState = true) {
   } else {
     navigate("dashboard", pushState);
   }
+}
+
+function updateNavButtons(view) {
+  const searchBtn = document.getElementById("nav-search");
+  const popularBtn = document.getElementById("nav-popular");
+  const adminBtn = document.getElementById("nav-admin");
+  if (searchBtn) searchBtn.classList.toggle("btn-primary", view === "dashboard");
+  if (popularBtn) popularBtn.classList.toggle("btn-primary", view === "popular");
+  if (adminBtn) adminBtn.classList.toggle("btn-primary", view === "admin");
 }
 
 // Navigation & View Router
@@ -156,6 +167,7 @@ function navigate(view, pushState = true) {
   
   // Render application shell wrapper if not already present
   ensureAppShell();
+  updateNavButtons(view);
   
   const mainContentEl = document.getElementById("main-content");
   
@@ -172,6 +184,15 @@ function navigate(view, pushState = true) {
     fetchDownloads();
     if (pushState && window.location.pathname !== "/") {
       history.pushState({ view }, "", "/");
+    }
+  } else if (view === "popular") {
+    stopAdminSync();
+    mainContentEl.innerHTML = renderPopularContent();
+    setupPopularContentListeners();
+    fetchPopularMedia();
+    fetchDownloads();
+    if (pushState && window.location.pathname !== "/popular") {
+      history.pushState({ view }, "", "/popular");
     }
   } else if (view === "admin") {
     const isAdminOrMod = state.user && (state.user.group_name === "Admin" || state.user.group_name === "Moderator");
@@ -270,6 +291,9 @@ async function fetchDownloads() {
       renderActiveDownloads();
       updateSidebarBadge();
       updateSearchResultButtons();
+      if (state.currentView === "popular") {
+        renderPopularGrid();
+      }
     }
   } catch (err) {
     console.error("Failed to fetch downloads:", err);
@@ -399,6 +423,8 @@ function renderAppShellTemplate() {
           <img src="${avatar}" alt="${name}">
           <span>${name}</span>
         </div>
+        <button id="nav-search" class="btn ${state.currentView === 'dashboard' ? 'btn-primary' : ''}">Search</button>
+        <button id="nav-popular" class="btn ${state.currentView === 'popular' ? 'btn-primary' : ''}">Popular</button>
         <button id="nav-downloads-toggle" class="btn sidebar-toggle-btn">
           Downloads <span id="downloads-badge" class="badge-count" style="display:none;">0</span>
         </button>
@@ -492,7 +518,259 @@ function renderDashboardContent() {
   `;
 }
 
-// Settings view removed (merged into admin panel)
+// Popular / Trending State & Helpers
+let popularState = {
+  type: "movie",
+  window: "day",
+  hideOnServer: false,
+  items: [],
+  loading: false,
+  error: null
+};
+
+function renderPopularContent() {
+  const isMovie = popularState.type === "movie";
+  const isDay = popularState.window === "day";
+
+  return `
+    <section class="popular-section">
+      <div class="popular-header-row">
+        <div>
+          <h2>Popular & Trending</h2>
+          <div class="popular-subtitle">Browse today's or this week's top trending movies and shows</div>
+        </div>
+        <div class="popular-controls">
+          <div class="btn-group" role="group">
+            <button type="button" id="popular-toggle-movie" class="btn ${isMovie ? 'btn-primary' : ''}">Movies</button>
+            <button type="button" id="popular-toggle-tv" class="btn ${!isMovie ? 'btn-primary' : ''}">TV Shows</button>
+          </div>
+          <div class="btn-group" role="group">
+            <button type="button" id="popular-toggle-day" class="btn ${isDay ? 'btn-primary' : ''}">Today</button>
+            <button type="button" id="popular-toggle-week" class="btn ${!isDay ? 'btn-primary' : ''}">This Week</button>
+          </div>
+          <label class="popular-checkbox-label">
+            <input type="checkbox" id="popular-hide-server" ${popularState.hideOnServer ? 'checked' : ''}>
+            <span>Hide items on server</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="popular-loading" class="loader-inline" style="display: none; margin: 2rem 0;">
+        <span class="spinner"></span>
+        <span>FETCHING TRENDING TITLES...</span>
+      </div>
+
+      <div id="popular-grid" class="popular-grid">
+        <div class="empty-state" style="grid-column: 1 / -1;">LOADING TRENDING TITLES...</div>
+      </div>
+    </section>
+  `;
+}
+
+function setupPopularContentListeners() {
+  const typeMovieBtn = document.getElementById("popular-toggle-movie");
+  const typeTvBtn = document.getElementById("popular-toggle-tv");
+  const windowDayBtn = document.getElementById("popular-toggle-day");
+  const windowWeekBtn = document.getElementById("popular-toggle-week");
+  const hideServerChk = document.getElementById("popular-hide-server");
+
+  if (typeMovieBtn && typeTvBtn) {
+    typeMovieBtn.addEventListener("click", () => {
+      if (popularState.type !== "movie") {
+        popularState.type = "movie";
+        typeMovieBtn.classList.add("btn-primary");
+        typeTvBtn.classList.remove("btn-primary");
+        fetchPopularMedia();
+      }
+    });
+    typeTvBtn.addEventListener("click", () => {
+      if (popularState.type !== "tv") {
+        popularState.type = "tv";
+        typeTvBtn.classList.add("btn-primary");
+        typeMovieBtn.classList.remove("btn-primary");
+        fetchPopularMedia();
+      }
+    });
+  }
+
+  if (windowDayBtn && windowWeekBtn) {
+    windowDayBtn.addEventListener("click", () => {
+      if (popularState.window !== "day") {
+        popularState.window = "day";
+        windowDayBtn.classList.add("btn-primary");
+        windowWeekBtn.classList.remove("btn-primary");
+        fetchPopularMedia();
+      }
+    });
+    windowWeekBtn.addEventListener("click", () => {
+      if (popularState.window !== "week") {
+        popularState.window = "week";
+        windowWeekBtn.classList.add("btn-primary");
+        windowDayBtn.classList.remove("btn-primary");
+        fetchPopularMedia();
+      }
+    });
+  }
+
+  if (hideServerChk) {
+    hideServerChk.addEventListener("change", (e) => {
+      popularState.hideOnServer = e.target.checked;
+      renderPopularGrid();
+    });
+  }
+
+  const gridEl = document.getElementById("popular-grid");
+  if (gridEl) {
+    gridEl.addEventListener("click", (e) => {
+      const actionBtn = e.target.closest(".btn-popular-action");
+      const posterWrap = e.target.closest(".popular-poster-wrap");
+      const targetEl = actionBtn || posterWrap;
+      if (targetEl) {
+        const title = targetEl.getAttribute("data-title");
+        const year = targetEl.getAttribute("data-year");
+        const isTv = targetEl.getAttribute("data-is-tv") === "1";
+        if (title) {
+          searchFromPopular(title, year, isTv);
+        }
+      }
+    });
+  }
+}
+
+async function fetchPopularMedia() {
+  popularState.loading = true;
+  popularState.error = null;
+  const loaderEl = document.getElementById("popular-loading");
+  const gridEl = document.getElementById("popular-grid");
+  if (loaderEl) loaderEl.style.display = "flex";
+  if (gridEl) gridEl.innerHTML = "";
+
+  try {
+    const headers = {};
+    if (state.token) {
+      headers["Authorization"] = `Bearer ${state.token}`;
+    }
+    const resp = await fetch(`/api/trending?type=${popularState.type}&window=${popularState.window}`, { headers });
+    const resData = await resp.json();
+    if (resp.ok) {
+      popularState.items = resData.results || [];
+      renderPopularGrid();
+    } else {
+      popularState.error = resData.error || "Failed to load trending items.";
+      if (gridEl) {
+        gridEl.innerHTML = `<div class="alert-box alert-error" style="grid-column: 1 / -1;">${escapeHtml(popularState.error)}</div>`;
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch popular media:", err);
+    popularState.error = "Network error loading trending media.";
+    if (gridEl) {
+      gridEl.innerHTML = `<div class="alert-box alert-error" style="grid-column: 1 / -1;">Network error loading trending media.</div>`;
+    }
+  } finally {
+    popularState.loading = false;
+    if (loaderEl) loaderEl.style.display = "none";
+  }
+}
+
+function isItemCompletedInDownloads(cleanTitle) {
+  if (!cleanTitle || !state.downloads) return false;
+  const target = cleanTitle.trim().toLowerCase();
+  const targetNorm = target.replace(/[^a-z0-9]/g, "");
+  return state.downloads.some(d => {
+    const s = (d.status || "").toLowerCase();
+    const isDone = s.includes("completed") || s.includes("downloaded") || Number(d.progress) >= 100;
+    if (!isDone) return false;
+    const dTitle = (d.title || "").trim().toLowerCase();
+    const dNorm = dTitle.replace(/[^a-z0-9]/g, "");
+    return dTitle === target || (targetNorm && dNorm === targetNorm);
+  });
+}
+
+function renderPopularGrid() {
+  const gridEl = document.getElementById("popular-grid");
+  if (!gridEl) return;
+
+  let items = popularState.items || [];
+  if (popularState.hideOnServer) {
+    items = items.filter(item => !item.in_database && !isItemCompletedInDownloads(item.clean_title));
+  }
+
+  if (items.length === 0) {
+    const msg = popularState.hideOnServer
+      ? "ALL TRENDING TITLES ARE CURRENTLY SAVED ON YOUR SERVER!"
+      : "NO TRENDING MEDIA FOUND";
+    gridEl.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1;">${msg}</div>`;
+    return;
+  }
+
+  let html = "";
+  items.forEach(item => {
+    const isSaved = item.in_database || isItemCompletedInDownloads(item.clean_title);
+    const posterHtml = item.poster_url
+      ? `<img src="${escapeHtml(item.poster_url)}" alt="${escapeHtml(item.clean_title)}" loading="lazy">`
+      : `<div class="popular-poster-stub"><span>${item.is_tv ? 'TV' : 'FILM'}</span></div>`;
+
+    const yearStr = item.year ? `(${item.year})` : "";
+    const genresStr = (item.genres && item.genres.length > 0)
+      ? item.genres.slice(0, 2).join(" • ")
+      : (item.is_tv ? "Series" : "Feature Film");
+    const ratingStr = item.vote_average ? Number(item.vote_average).toFixed(1) : "—";
+
+    html += `
+      <div class="popular-card ${isSaved ? 'in-database' : ''} animate-slide">
+        <div class="popular-poster-wrap" data-title="${escapeHtml(item.clean_title)}" data-year="${item.year || ''}" data-is-tv="${item.is_tv ? '1' : '0'}" title="Search releases for ${escapeHtml(item.clean_title)}">
+          ${posterHtml}
+          <div class="popular-rating-pill">★ ${ratingStr}</div>
+          ${isSaved ? `
+            <div class="popular-server-pill">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+              ON SERVER
+            </div>` : ''}
+        </div>
+        <div class="popular-card-body">
+          <div class="popular-card-title" title="${escapeHtml(item.clean_title)}">
+            ${escapeHtml(item.clean_title)} <span class="popular-year">${escapeHtml(yearStr)}</span>
+          </div>
+          <div class="popular-card-meta">
+            <span class="media-type-badge">${item.is_tv ? 'TV' : 'MOVIE'}</span>
+            <span class="popular-genres">${escapeHtml(genresStr)}</span>
+          </div>
+          <p class="popular-overview" title="${escapeHtml(item.overview || '')}">
+            ${escapeHtml(item.overview || 'No overview available.')}
+          </p>
+          <div class="popular-card-footer">
+            <button class="btn ${isSaved ? 'btn-server-saved' : 'btn-primary'} btn-popular-action" 
+                    data-title="${escapeHtml(item.clean_title)}" 
+                    data-year="${item.year || ''}" 
+                    data-is-tv="${item.is_tv ? '1' : '0'}">
+              ${isSaved ? '✓ Saved • Search More' : 'Search Releases'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  gridEl.innerHTML = html;
+}
+
+function searchFromPopular(cleanTitle, year, isTv) {
+  navigate("dashboard");
+  const searchInput = document.getElementById("search-input");
+  const queryStr = cleanTitle;
+  if (searchInput) {
+    searchInput.value = queryStr;
+  }
+  const categorySelect = document.getElementById("filter-category");
+  const cat = isTv ? "tv" : "movie";
+  if (categorySelect) {
+    categorySelect.value = cat;
+  }
+  saveRecentSearch();
+  updateClearButtonVisibility();
+  searchTrackers(queryStr, cat);
+}
 
 // Client Side Filter & Sort logic
 function getFilteredResults() {
@@ -1228,6 +1506,9 @@ function updateDownloadProgressUI(data) {
   }
   updateSidebarBadge();
   updateSearchResultButtons();
+  if (state.currentView === "popular") {
+    renderPopularGrid();
+  }
 }
 
 // Sidebar logic
@@ -1299,6 +1580,20 @@ function setupAppShellListeners() {
   
   document.getElementById("nav-logout").addEventListener("click", logout);
   
+  const searchNavBtn = document.getElementById("nav-search");
+  if (searchNavBtn) {
+    searchNavBtn.addEventListener("click", () => {
+      navigate("dashboard");
+    });
+  }
+
+  const popularNavBtn = document.getElementById("nav-popular");
+  if (popularNavBtn) {
+    popularNavBtn.addEventListener("click", () => {
+      navigate("popular");
+    });
+  }
+
   const adminNavBtn = document.getElementById("nav-admin");
   if (adminNavBtn) {
     adminNavBtn.addEventListener("click", () => {
@@ -2580,6 +2875,9 @@ function handleDownloadAddedSocket(data) {
     renderActiveDownloads();
     updateSidebarBadge();
     updateSearchResultButtons();
+    if (state.currentView === "popular") {
+      renderPopularGrid();
+    }
   }
   
   if (state.currentView === "admin") {
@@ -2618,6 +2916,9 @@ function handleDownloadDeletedSocket(data) {
   
   updateSidebarBadge();
   updateSearchResultButtons();
+  if (state.currentView === "popular") {
+    renderPopularGrid();
+  }
 
   if (state.currentView === "admin") {
     fetchAdminStats();
