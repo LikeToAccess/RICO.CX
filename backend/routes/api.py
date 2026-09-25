@@ -521,15 +521,16 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 											bytes_since_flush += len(chunk)
 											now_f = time.time()
 
-											# Flush every 8MB to prevent dirty page accumulation on NFS/disk
-											if bytes_since_flush >= 8 * 1024 * 1024:
+											# Cooperative yield for gevent / event loop on every 1MB chunk
+											time.sleep(0.001)
+
+											# Flush userland buffers every 16MB without stalling fsync
+											if bytes_since_flush >= 16 * 1024 * 1024:
 												try:
 													f_out.flush()
 												except Exception:
 													pass
 												bytes_since_flush = 0
-												# Cooperative yield for gevent / event loop
-												time.sleep(0.001)
 
 											# 5-second sliding window speed calculation
 											speed_samples.append((now_f, current_file_downloaded))
@@ -837,7 +838,8 @@ def me():
 
 _LIBRARY_SIZES_CACHE: Dict[str, Tuple[Set[int], float]] = {}
 _LIBRARY_SIZES_LOCK = threading.Lock()
-_LIBRARY_SIZES_TTL = 45.0  # 45 seconds TTL
+_LIBRARY_SIZES_SCANNING: Set[str] = set()
+_LIBRARY_SIZES_TTL = 1800.0  # 30 minutes TTL
 
 
 def invalidate_library_sizes_cache(library_root: Optional[str] = None) -> None:
@@ -850,32 +852,128 @@ def invalidate_library_sizes_cache(library_root: Optional[str] = None) -> None:
 
 
 def get_library_file_sizes(library_root: str) -> Set[int]:
-	"""Returns a cached set of file sizes present in the local media library root (45s TTL)."""
+	"""
+	Returns a set of file sizes present in the local media library root.
+	Fast, non-blocking implementation:
+	- First collects all completed download sizes directly from the database (instant 0.1ms).
+	- Merges with cached filesystem sizes.
+	- If cache is empty or expired, scans synchronously only for small local folders (<300 files)
+	  or dispatches a non-blocking background scanner for massive libraries (e.g. NFS mounts),
+	  preventing 80+ second stop-the-world freezes on the web thread.
+	"""
+	t_start = time.time()
+	db = Database()
+	rows = db.query("SELECT DISTINCT size FROM downloads WHERE status = 'completed' AND size > 0") or []
+	db_sizes: Set[int] = {r["size"] for r in rows if r["size"]}
+
 	if not library_root or not os.path.exists(library_root):
-		return set()
+		return db_sizes
 
 	abs_root = os.path.abspath(library_root)
 	now = time.time()
+	cached_disk_sizes: Set[int] = set()
+
 	with _LIBRARY_SIZES_LOCK:
 		if abs_root in _LIBRARY_SIZES_CACHE:
 			cached_sizes, expiry = _LIBRARY_SIZES_CACHE[abs_root]
+			cached_disk_sizes = set(cached_sizes)
 			if now < expiry:
-				return cached_sizes
+				logger.debug("[PERF] get_library_file_sizes cache HIT in %.3fms (total %d sizes)", (time.time() - t_start) * 1000, len(cached_disk_sizes | db_sizes))
+				return cached_disk_sizes | db_sizes
 
-	sizes: Set[int] = set()
+	# Check top level to distinguish small local test directories from massive 22TB NFS mounts
+	file_count = 0
+	is_small_dir = True
 	try:
-		for root, _, files in os.walk(abs_root):
-			for f in files:
-				try:
-					sizes.add(os.path.getsize(os.path.join(root, f)))
-				except OSError:
-					pass
+		with os.scandir(abs_root) as it:
+			for entry in it:
+				if entry.is_dir() and entry.name.upper() in ("MOVIES", "TV SHOWS"):
+					try:
+						with os.scandir(entry.path) as sub_it:
+							if sum(1 for _ in sub_it) > 100:
+								is_small_dir = False
+								break
+					except OSError:
+						pass
+				if not is_small_dir:
+					break
 	except OSError:
-		pass
+		is_small_dir = False
 
-	with _LIBRARY_SIZES_LOCK:
-		_LIBRARY_SIZES_CACHE[abs_root] = (sizes, now + _LIBRARY_SIZES_TTL)
-	return sizes
+	if is_small_dir:
+		sizes: Set[int] = set()
+		try:
+			for root, _, files in os.walk(abs_root):
+				for f in files:
+					file_count += 1
+					if file_count > 300:
+						is_small_dir = False
+						break
+					try:
+						sizes.add(os.path.getsize(os.path.join(root, f)))
+					except OSError:
+						pass
+				if not is_small_dir:
+					break
+		except OSError:
+			pass
+
+		if is_small_dir:
+			with _LIBRARY_SIZES_LOCK:
+				_LIBRARY_SIZES_CACHE[abs_root] = (sizes, now + _LIBRARY_SIZES_TTL)
+			logger.debug("[PERF] get_library_file_sizes scanned small directory %s in %.3fms", abs_root, (time.time() - t_start) * 1000)
+			return sizes | db_sizes
+
+	# For large mounts (like 22TB NFS /mnt/PLEX), run scan in background so web thread NEVER blocks
+	def _async_scan() -> None:
+		with _LIBRARY_SIZES_LOCK:
+			if abs_root in _LIBRARY_SIZES_SCANNING:
+				return
+			_LIBRARY_SIZES_SCANNING.add(abs_root)
+
+		logger.info("[PERF] Started non-blocking background library size scan for %s", abs_root)
+		scan_start = time.time()
+		scanned_sizes: Set[int] = set()
+		total_files = 0
+		try:
+			# Only scan media folders (MOVIES and TV SHOWS) to skip BACKUP, MUSIC, etc.
+			dirs_to_scan = []
+			for target_dir in ("MOVIES", "TV SHOWS"):
+				full_target = os.path.join(abs_root, target_dir)
+				if os.path.exists(full_target):
+					dirs_to_scan.append(full_target)
+			if not dirs_to_scan:
+				dirs_to_scan = [abs_root]
+
+			for scan_dir in dirs_to_scan:
+				for root, _, files in os.walk(scan_dir):
+					for f in files:
+						total_files += 1
+						try:
+							scanned_sizes.add(os.path.getsize(os.path.join(root, f)))
+						except OSError:
+							pass
+					# Cooperatively yield every directory to prevent gevent CPU / I/O starvation
+					time.sleep(0.001)
+
+			with _LIBRARY_SIZES_LOCK:
+				_LIBRARY_SIZES_CACHE[abs_root] = (scanned_sizes, time.time() + _LIBRARY_SIZES_TTL)
+			logger.info(
+				"[PERF] Finished background library scan for %s in %.2fs (found %d files, %d unique sizes)",
+				abs_root, time.time() - scan_start, total_files, len(scanned_sizes)
+			)
+		except Exception as err:
+			logger.error("[PERF] Background library scan failed for %s: %s", abs_root, err)
+		finally:
+			with _LIBRARY_SIZES_LOCK:
+				_LIBRARY_SIZES_SCANNING.discard(abs_root)
+
+	start_bg_task(_async_scan)
+	logger.info(
+		"[PERF] get_library_file_sizes returned instantly in %.3fms (dispatched background scan for %s)",
+		(time.time() - t_start) * 1000, abs_root
+	)
+	return cached_disk_sizes | db_sizes
 
 
 def populate_all_cards_downloads(cards: List[Dict[str, Any]], file_sizes: Set[int], db: Database) -> None:
@@ -1048,22 +1146,34 @@ def search():
 			"data": cards
 		})
 
+	t_search_start = time.time()
 	prowlarr_url = settings.get("prowlarr_url") or os.environ.get("PROWLARR_URL", "")
 	prowlarr_key = settings.get("prowlarr_api_key") or os.environ.get("PROWLARR_API_KEY", "")
 
 	search_client = SearchClient(base_url=prowlarr_url, api_key=prowlarr_key, tmdb_api_key=tmdb_key)
 	results = search_client.search(query, category=category)
+	t_prowlarr = time.time() - t_search_start
 
-	# Parallel poster resolution for any uncached cards
-	if tmdb_key:
-		tmdb.resolve_posters_batch(results)
+	# Resolve TMDb posters only for cards that missed poster resolution
+	missing_posters = [r for r in results if getattr(r, 'poster_url', None) is None]
+	if tmdb_key and missing_posters:
+		tmdb.resolve_posters_batch(missing_posters)
 
+	t_sizes_start = time.time()
 	library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
 	file_sizes = get_library_file_sizes(library_root)
+	t_sizes = time.time() - t_sizes_start
 
 	results_data = [r.to_dict() for r in results]
+	t_pop_start = time.time()
 	db = Database()
 	populate_all_cards_downloads(results_data, file_sizes, db)
+	t_pop = time.time() - t_pop_start
+
+	logger.info(
+		"[PERF] /api/search: query='%s' total=%.3fs (Prowlarr=%.3fs, sizes=%.3fs, populate=%.3fs, cards=%d)",
+		query, time.time() - t_search_start, t_prowlarr, t_sizes, t_pop, len(results_data)
+	)
 
 	return jsonify({
 		"type": "search_results",
@@ -1075,6 +1185,7 @@ def search():
 @api_bp.route('/download', methods=['POST'])
 @login_required
 def download():
+	t_dl_start = time.time()
 	data = request.json or {}
 	magnet = data.get('magnet')
 	title = data.get('title', 'Unknown Torrent')
@@ -1099,9 +1210,14 @@ def download():
 	file_sizes = get_library_file_sizes(library_root)
 
 	force_overwrite = bool(data.get('overwrite', False))
-	if not force_overwrite and size > 0 and size in file_sizes:
-		logger.info(f"Preventive skip: File with size {size} already exists in library. Marking completed.")
-		db = Database()
+	db = Database()
+	existing_completed = db.query(
+		"SELECT id FROM downloads WHERE (magnet = ? OR (size > 0 AND size = ?)) AND status = 'completed'",
+		(magnet, size),
+		one=True
+	)
+	if not force_overwrite and (existing_completed or (size > 0 and size in file_sizes)):
+		logger.info(f"Preventive skip: File with size {size} / magnet already completed in library. Marking completed.")
 		skipped_id = f"skipped_{int(time.time())}"
 		db_download_id = db.execute(
 			"INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -1205,6 +1321,7 @@ def download():
 			"full_name": g.user.full_name or g.user.username
 		})
 
+		logger.info("[PERF] /api/download queued '%s' in %.3fms", title, (time.time() - t_dl_start) * 1000)
 		return jsonify({
 			"success": True,
 			"torbox_id": torrent_id,

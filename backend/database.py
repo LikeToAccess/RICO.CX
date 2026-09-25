@@ -119,7 +119,6 @@ class Database:
 		try:
 			cursor.execute(sql_query, args)
 			rv = cursor.fetchall()
-			conn.commit()
 			return (rv[0] if rv else None) if one else rv
 		except Exception as exc:  # pylint: disable=broad-exception-caught
 			logger.error("Database query error: %s", exc)

@@ -224,17 +224,22 @@ class TmdbClient:
 			except Exception as e:  # pylint: disable=broad-exception-caught
 				logger.debug("Parallel TMDb resolution failed for %s: %s", getattr(card, 'clean_title', ''), e)
 
-		# Use bounded thread pool for low latency concurrent resolution
+		# Use bounded concurrent worker pool for low latency resolution
 		if len(cards_to_resolve) == 1:
 			_worker(cards_to_resolve[0])
 			return
 
+		max_workers = min(len(cards_to_resolve), 8)
 		try:
-			max_workers = min(len(cards_to_resolve), 8)
-			with ThreadPoolExecutor(max_workers=max_workers) as executor:
-				list(executor.map(_worker, cards_to_resolve))
-		except Exception as exc:  # pylint: disable=broad-exception-caught
-			logger.error("Batch TMDb resolution error: %s", exc)
+			from gevent.pool import Pool as GeventPool  # type: ignore[import-untyped]
+			pool = GeventPool(max_workers)
+			pool.map(_worker, cards_to_resolve)
+		except (ImportError, Exception):
+			try:
+				with ThreadPoolExecutor(max_workers=max_workers) as executor:
+					list(executor.map(_worker, cards_to_resolve))
+			except Exception as exc:  # pylint: disable=broad-exception-caught
+				logger.error("Batch TMDb resolution error: %s", exc)
 
 	def get_tv_seasons(self, tv_id: int) -> List[int]:
 		"""Returns a sorted list of valid season numbers for a given TV show ID on TMDB."""
