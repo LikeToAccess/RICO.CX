@@ -243,6 +243,10 @@ function initSocket() {
     updateDownloadProgressUI(data);
   });
 
+  state.socket.on("download_completed", (data) => {
+    handleDownloadCompleted(data);
+  });
+
   state.socket.on("download_added", (data) => {
     handleDownloadAddedSocket(data);
   });
@@ -305,6 +309,9 @@ async function searchTrackers(query, category) {
   if (document.activeElement && typeof document.activeElement.blur === "function") {
     document.activeElement.blur();
   }
+
+  // Clear stale TV season caches so fresh searches fetch latest on-disk state
+  clearTvCache();
 
   const container = document.getElementById("results-list");
   const loaderEl = document.getElementById("search-loading");
@@ -838,11 +845,19 @@ function searchFromPopular(cleanTitle, year, isTv) {
 // TV Show Tracker State & Cache
 const tvDetailsCache = new Map();
 const tvSeasonCache = new Map();
+const TV_CACHE_TTL_MS = 30000;
 
-async function getTvDetails(tvId, title, year) {
+function clearTvCache() {
+  tvDetailsCache.clear();
+  tvSeasonCache.clear();
+}
+
+async function getTvDetails(tvId, title, year, bypassCache = false) {
   const cacheKey = tvId ? String(tvId) : `${title}:${year || ""}`.toLowerCase();
-  if (tvDetailsCache.has(cacheKey)) {
-    return tvDetailsCache.get(cacheKey);
+  const cached = tvDetailsCache.get(cacheKey);
+  const now = Date.now();
+  if (!bypassCache && cached && (now - cached.timestamp < TV_CACHE_TTL_MS)) {
+    return cached.data;
   }
   const headers = {};
   if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
@@ -855,8 +870,8 @@ async function getTvDetails(tvId, title, year) {
     const resp = await fetch(`/api/tv/details?${params.toString()}`, { headers });
     if (!resp.ok) return null;
     const data = await resp.json();
-    tvDetailsCache.set(cacheKey, data);
-    if (data.tv_id) tvDetailsCache.set(String(data.tv_id), data);
+    tvDetailsCache.set(cacheKey, { data, timestamp: now });
+    if (data.tv_id) tvDetailsCache.set(String(data.tv_id), { data, timestamp: now });
     return data;
   } catch (e) {
     console.error("Failed to fetch TV details:", e);
@@ -864,10 +879,12 @@ async function getTvDetails(tvId, title, year) {
   }
 }
 
-async function getTvSeasonDetails(tvId, season, title, year) {
+async function getTvSeasonDetails(tvId, season, title, year, bypassCache = false) {
   const cacheKey = `${tvId}:${season}`;
-  if (tvSeasonCache.has(cacheKey)) {
-    return tvSeasonCache.get(cacheKey);
+  const cached = tvSeasonCache.get(cacheKey);
+  const now = Date.now();
+  if (!bypassCache && cached && (now - cached.timestamp < TV_CACHE_TTL_MS)) {
+    return cached.data;
   }
   const headers = {};
   if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
@@ -882,7 +899,7 @@ async function getTvSeasonDetails(tvId, season, title, year) {
     const resp = await fetch(`/api/tv/season?${params.toString()}`, { headers });
     if (!resp.ok) return null;
     const data = await resp.json();
-    tvSeasonCache.set(cacheKey, data);
+    tvSeasonCache.set(cacheKey, { data, timestamp: now });
     return data;
   } catch (e) {
     console.error("Failed to fetch TV season details:", e);
@@ -897,6 +914,7 @@ async function toggleTvDrawer(index, item) {
 
   if (drawerEl.style.display !== "none") {
     drawerEl.style.display = "none";
+    drawerEl._tvTrackerContext = null;
     if (toggleBtn) toggleBtn.classList.remove("active");
     return;
   }
@@ -918,6 +936,12 @@ async function toggleTvDrawer(index, item) {
   }
 
   const defaultSeason = showData.seasons[0]?.season_number || 1;
+  drawerEl._tvTrackerContext = {
+    index,
+    item,
+    cleanTitle,
+    activeSeason: defaultSeason
+  };
   renderTvTrackerContent(drawerEl, showData, defaultSeason, `card-${index}`);
 }
 
@@ -961,6 +985,11 @@ function openTvTrackerModal(item) {
       return;
     }
     const defaultSeason = showData.seasons[0]?.season_number || 1;
+    modalEl._tvTrackerContext = {
+      item,
+      displayTitle,
+      activeSeason: defaultSeason
+    };
     renderTvTrackerContent(bodyEl, showData, defaultSeason, "modal-tv");
   }).catch(err => {
     console.error("TV Tracker modal error:", err);
@@ -970,7 +999,49 @@ function openTvTrackerModal(item) {
 
 function closeTvTrackerModal() {
   const modalEl = document.getElementById("tv-tracker-modal");
-  if (modalEl) modalEl.style.display = "none";
+  if (modalEl) {
+    modalEl.style.display = "none";
+    modalEl._tvTrackerContext = null;
+  }
+}
+
+async function refreshOpenTvTrackers() {
+  clearTvCache();
+
+  // 1. Refresh any open in-card drawers
+  const drawers = document.querySelectorAll(".tv-drawer");
+  for (const drawerEl of drawers) {
+    if (drawerEl.style.display === "none") continue;
+    const ctx = drawerEl._tvTrackerContext;
+    if (!ctx || !ctx.item) continue;
+    try {
+      const showData = await getTvDetails(ctx.item.tmdb_id, ctx.cleanTitle, ctx.item.year, true);
+      if (showData && showData.seasons && showData.seasons.length > 0) {
+        const seasonToLoad = ctx.activeSeason || showData.seasons[0]?.season_number || 1;
+        renderTvTrackerContent(drawerEl, showData, seasonToLoad, `card-${ctx.index}`);
+      }
+    } catch (e) {
+      console.error("Failed to refresh TV drawer:", e);
+    }
+  }
+
+  // 2. Refresh open TV tracker modal if visible
+  const modalEl = document.getElementById("tv-tracker-modal");
+  if (modalEl && modalEl.style.display === "flex") {
+    const ctx = modalEl._tvTrackerContext;
+    const bodyEl = document.getElementById("tv-modal-body");
+    if (ctx && ctx.item && bodyEl) {
+      try {
+        const showData = await getTvDetails(ctx.item.tmdb_id || ctx.item.id, ctx.displayTitle, ctx.item.year, true);
+        if (showData && showData.seasons && showData.seasons.length > 0) {
+          const seasonToLoad = ctx.activeSeason || showData.seasons[0]?.season_number || 1;
+          renderTvTrackerContent(bodyEl, showData, seasonToLoad, "modal-tv");
+        }
+      } catch (e) {
+        console.error("Failed to refresh TV modal:", e);
+      }
+    }
+  }
 }
 
 function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, trackerIdPrefix) {
@@ -996,6 +1067,9 @@ function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, tracker
     tabBtn.onclick = () => {
       containerEl.querySelectorAll(".tv-season-tab").forEach(t => t.classList.remove("active"));
       tabBtn.classList.add("active");
+      if (containerEl._tvTrackerContext) {
+        containerEl._tvTrackerContext.activeSeason = s.season_number;
+      }
       loadSeasonView(s.season_number);
     };
 
@@ -1225,7 +1299,9 @@ function syncSearchResultsWithDownloads() {
     // Check if any completed download matches this card's clean title
     const titleMatch = completedDownloads.find(d => {
       const dTitle = (d.title || "").trim().toLowerCase();
-      return dTitle === cleanTitle;
+      if (dTitle && dTitle === cleanTitle) return true;
+      const dClean = dTitle.replace(/\b(?:s\d{1,2}[eE]\d{1,2}|s\d{1,2}|season\s*\d{1,2}|e\d{1,2})\b/gi, '').trim().toLowerCase();
+      return dClean && dClean === cleanTitle;
     });
 
     if (titleMatch && !item.in_database) {
@@ -1243,8 +1319,24 @@ function syncSearchResultsWithDownloads() {
     (item.downloads || []).forEach(dl => {
       const dlHash = extractHash(dl.download_url);
       const match = completedDownloads.find(d => {
+        // 1. Magnet URL match
         if (d.magnet && dl.download_url && areMagnetsEqual(d.magnet, dl.download_url)) return true;
+        // 2. Hash match
         if (dlHash && d.magnet && extractHash(d.magnet) === dlHash) return true;
+        // 3. Exact byte size match
+        if (d.size && dl.size && Number(d.size) === Number(dl.size)) return true;
+        // 4. Exact release title / filename match
+        if (d.filename && dl.title && d.filename.trim().toLowerCase() === dl.title.trim().toLowerCase()) return true;
+        // 5. Torbox ID match
+        if (dl.torbox_id && d.torbox_id && String(dl.torbox_id) === String(d.torbox_id)) return true;
+        // 6. TV Season pack match: same show and same season
+        if (item.is_tv && dl.is_season_pack && dl.season) {
+          const dTitleClean = (d.title || "").replace(/\b(?:s\d{1,2}[eE]\d{1,2}|s\d{1,2}|season\s*\d{1,2}|e\d{1,2})\b/gi, '').trim().toLowerCase();
+          if (dTitleClean === cleanTitle) {
+            const sMatch = (d.filename || "").match(/\b[sS](\d{1,2})\b/i) || (d.filename || "").match(/\bseason\s*(\d{1,2})\b/i);
+            if (sMatch && parseInt(sMatch[1], 10) === dl.season) return true;
+          }
+        }
         return false;
       });
 
@@ -1845,6 +1937,8 @@ function updateDownloadProgressUI(data) {
     matchingStateDl.progress = progress;
     matchingStateDl.speed = speed;
     matchingStateDl.size = size;
+    if (data.title) matchingStateDl.title = data.title;
+    if (data.filename) matchingStateDl.filename = data.filename;
     if (data.magnet) matchingStateDl.magnet = data.magnet;
     if (data.user_id) matchingStateDl.user_id = data.user_id;
   } else {
@@ -1860,8 +1954,68 @@ function updateDownloadProgressUI(data) {
       user_id: data.user_id
     });
   }
+
+  const statusLower = (status || "").toLowerCase();
+  const isCompleted = statusLower.includes("completed") || statusLower.includes("downloaded") || Number(progress) >= 100;
+  if (isCompleted) {
+    handleDownloadCompleted(data);
+    return;
+  }
+
   updateSidebarBadge();
   updateSearchResultButtons();
+  if (state.currentView === "popular") {
+    renderPopularGrid();
+  }
+}
+
+let _lastCompletedId = null;
+let _lastCompletedTime = 0;
+
+async function handleDownloadCompleted(data) {
+  if (!data) return;
+  const torrentId = data.id || data.torbox_id;
+  const now = Date.now();
+
+  // Guard against duplicate execution within 1.5s for same download
+  if (torrentId && _lastCompletedId === String(torrentId) && (now - _lastCompletedTime < 1500)) {
+    return;
+  }
+  if (torrentId) {
+    _lastCompletedId = String(torrentId);
+    _lastCompletedTime = now;
+  }
+
+  // 1. Update state.downloads
+  const matchingStateDl = state.downloads.find(d => String(d.torbox_id) === String(torrentId));
+  if (matchingStateDl) {
+    matchingStateDl.status = "completed";
+    matchingStateDl.progress = 100;
+    matchingStateDl.speed = 0;
+    if (data.size) matchingStateDl.size = data.size;
+    if (data.title) matchingStateDl.title = data.title;
+    if (data.filename) matchingStateDl.filename = data.filename;
+    if (data.category) matchingStateDl.category = data.category;
+    if (data.magnet) matchingStateDl.magnet = data.magnet;
+  }
+
+  // 2. Clear TV cache so any subsequent drawer/modal inspects fresh on-disk state
+  clearTvCache();
+
+  // 3. Re-sync active search cards with completed downloads & update UI elements
+  syncSearchResultsWithDownloads();
+  updateSearchResultButtons();
+
+  // 4. Update sidebar badge and active download card list
+  updateSidebarBadge();
+  renderActiveDownloads();
+
+  // 5. Live update of open TV drawers / modal
+  await refreshOpenTvTrackers();
+
+  // 6. Fetch canonical database downloads in background
+  fetchDownloads();
+
   if (state.currentView === "popular") {
     renderPopularGrid();
   }
@@ -3270,6 +3424,8 @@ function handleDownloadDeletedSocket(data) {
     }
   }
   
+  clearTvCache();
+  refreshOpenTvTrackers();
   updateSidebarBadge();
   updateSearchResultButtons();
   if (state.currentView === "popular") {

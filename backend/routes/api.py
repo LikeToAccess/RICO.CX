@@ -647,7 +647,7 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 
 				if local_transfer_success:
 					db.execute("UPDATE downloads SET status = 'completed', progress = 100, speed = 0 WHERE id = ?", (db_download_id,))
-					socketio.emit('download_progress', {
+					completed_payload = {
 						'id': torbox_id,
 						'title': metadata.get('title'),
 						'filename': metadata.get('filename'),
@@ -656,8 +656,14 @@ def _execute_monitor_and_download(user_id, torbox_id, metadata, db_download_id):
 						'progress': 100,
 						'speed': 0,
 						'size': total_files_size,
+						'category': category,
+						'tmdb_id': tmdb_id,
+						'season': metadata.get('season'),
+						'episode': metadata.get('episode'),
 						'user_id': user_id
-					})
+					}
+					socketio.emit('download_progress', completed_payload)
+					socketio.emit('download_completed', completed_payload)
 					invalidate_library_sizes_cache(library_root)
 					logger.info(f"Download complete: {metadata.get('filename')}")
 				else:
@@ -1125,7 +1131,7 @@ def start_magnet_download(
 			"INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			(user.id, skipped_id, title, filename, magnet, 'completed', category, size, 100)
 		)
-		socketio.emit('download_progress', {
+		skipped_payload = {
 			'id': skipped_id,
 			'title': title,
 			'filename': filename,
@@ -1134,8 +1140,13 @@ def start_magnet_download(
 			'progress': 100,
 			'speed': 0,
 			'size': size,
+			'category': category,
+			'season': season,
+			'episode': episode,
 			'user_id': user.id
-		})
+		}
+		socketio.emit('download_progress', skipped_payload)
+		socketio.emit('download_completed', skipped_payload)
 		socketio.emit('download_added', {
 			"torbox_id": skipped_id,
 			"title": title,

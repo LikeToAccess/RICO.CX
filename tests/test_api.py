@@ -315,6 +315,17 @@ class TestAPI(unittest.TestCase):
 		self.assertTrue(os.path.exists(expected_dir), "TV show directory with TMDb tag should exist")
 		self.assertTrue(os.path.exists(expected_file), "TV show filename without TMDb tag should exist")
 
+		# Verify download_completed event emission with rich TV metadata
+		completed_calls = [
+			c for c in mock_socketio.emit.call_args_list
+			if len(c[0]) > 0 and c[0][0] == 'download_completed'
+		]
+		self.assertTrue(len(completed_calls) >= 1, "download_completed event should be emitted")
+		payload = completed_calls[0][0][1]
+		self.assertEqual(payload['status'], 'completed')
+		self.assertEqual(payload['category'], 'tv')
+		self.assertEqual(payload['tmdb_id'], 125928)
+
 		# Now test cancellation deletes the file using the correct prefix
 		# We need to re-insert the download into DB as completed first
 		db_download_id2 = self.db.execute(
