@@ -163,14 +163,26 @@ class TmdbClient:
 		if not self.api_key or not query or not query.strip():
 			return None
 
-		cached = self._get_from_cache("tv", query, year)
+		# Sanitize query by stripping season and episode tokens (e.g. S01, Season 1, S01E02)
+		clean_query = re.sub(
+			r'\b(?:[sS]\d{1,2}[eE]\d{1,2}|[sS]eason[\s._-]*\d{1,2}|[sS]\d{1,2}|[eE]pisode[\s._-]*\d{1,2}|[eE]\d{1,2})\b',
+			'',
+			query,
+			flags=re.IGNORECASE
+		).strip()
+		clean_query = re.sub(r'[\.\-\_\+\[\]\(\)\:\,]', ' ', clean_query).strip()
+		clean_query = ' '.join(clean_query.split())
+		if not clean_query:
+			clean_query = query.strip()
+
+		cached = self._get_from_cache("tv", clean_query, year)
 		if cached is not None:
 			return cached[1]
 
 		url = f"{self.base_url}/search/tv"
 		params: Dict[str, Union[str, int]] = {
 			"api_key": self.api_key,
-			"query": query
+			"query": clean_query
 		}
 		if year is not None:
 			params["first_air_date_year"] = int(year)
@@ -187,7 +199,7 @@ class TmdbClient:
 				results = resp.json().get("results", [])
 
 			if results:
-				query_clean = re.sub(r'[^\w\s]', '', query.lower()).strip()
+				query_clean = re.sub(r'[^\w\s]', '', clean_query.lower()).strip()
 
 				def score_candidate(r: Dict[str, Any]) -> int:
 					name_raw = str(r.get("name", "") or r.get("title", ""))
@@ -224,10 +236,14 @@ class TmdbClient:
 					"id": match.get("id"),
 					"poster_url": poster_url
 				}
-				self._save_to_cache("tv", query, year, result_data)
+				self._save_to_cache("tv", clean_query, year, result_data)
+				if query.strip().lower() != clean_query.lower():
+					self._save_to_cache("tv", query, year, result_data)
 				return result_data
 
-			self._save_to_cache("tv", query, year, None)
+			self._save_to_cache("tv", clean_query, year, None)
+			if query.strip().lower() != clean_query.lower():
+				self._save_to_cache("tv", query, year, None)
 		except Exception as exc:  # pylint: disable=broad-exception-caught
 			logger.error("TMDB search_tv failed: %s", exc)
 		return None

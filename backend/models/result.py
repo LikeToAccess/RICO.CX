@@ -58,60 +58,62 @@ class TorrentResult:
 			self.is_tv = True
 			self.season = int(s_e_match.group(1))
 			self.episode = int(s_e_match.group(2))
-			tv_match_pos = s_e_match.start()
+			if tv_match_pos is None or s_e_match.start() < tv_match_pos:
+				tv_match_pos = s_e_match.start()
 
 		# 2. Detect 1x02, 01x02
-		if not self.is_tv:
-			x_match = re.search(r'\b(\d{1,2})x(\d{1,2})\b', self.title)
-			if x_match:
-				self.is_tv = True
+		x_match = re.search(r'\b(\d{1,2})x(\d{1,2})\b', self.title)
+		if x_match:
+			self.is_tv = True
+			if self.season is None:
 				self.season = int(x_match.group(1))
+			if self.episode is None:
 				self.episode = int(x_match.group(2))
+			if tv_match_pos is None or x_match.start() < tv_match_pos:
 				tv_match_pos = x_match.start()
 
 		# 3. Explicit Season: Season 1, Seasons 1-3, Season.01, Season_1
-		if self.season is None:
-			season_match = re.search(r'\b[sS]eason[s]?[\s._-]*(\d{1,2})\b', self.title, re.IGNORECASE)
-			if season_match:
-				self.is_tv = True
+		season_match = re.search(r'\b[sS]eason[s]?[\s._-]*(\d{1,2})\b', self.title, re.IGNORECASE)
+		if season_match:
+			self.is_tv = True
+			if self.season is None:
 				self.season = int(season_match.group(1))
-				if tv_match_pos is None or season_match.start() < tv_match_pos:
-					tv_match_pos = season_match.start()
+			if tv_match_pos is None or season_match.start() < tv_match_pos:
+				tv_match_pos = season_match.start()
 
 		# 4. Standalone Season token: S01, S1, S01-S03, S01-03
-		if self.season is None:
-			s_match = re.search(r'\b[sS](\d{1,2})\b', self.title)
-			if s_match:
-				self.is_tv = True
+		s_match = re.search(r'\b[sS](\d{1,2})\b', self.title)
+		if s_match:
+			self.is_tv = True
+			if self.season is None:
 				self.season = int(s_match.group(1))
-				if tv_match_pos is None or s_match.start() < tv_match_pos:
-					tv_match_pos = s_match.start()
+			if tv_match_pos is None or s_match.start() < tv_match_pos:
+				tv_match_pos = s_match.start()
 
 		# 5. Explicit Episode word: Episode 1, Ep 1, Ep.01, Ep_01
-		if self.episode is None:
-			ep_match = re.search(r'\b(?:[eE]pisode|[eE]p)[\s._-]*(\d{1,2})\b', self.title, re.IGNORECASE)
-			if ep_match:
-				self.is_tv = True
+		ep_match = re.search(r'\b(?:[eE]pisode|[eE]p)[\s._-]*(\d{1,2})\b', self.title, re.IGNORECASE)
+		if ep_match:
+			self.is_tv = True
+			if self.episode is None:
 				self.episode = int(ep_match.group(1))
-				if tv_match_pos is None or ep_match.start() < tv_match_pos:
-					tv_match_pos = ep_match.start()
+			if tv_match_pos is None or ep_match.start() < tv_match_pos:
+				tv_match_pos = ep_match.start()
 
 		# 6. Standalone Episode token: E01, E1
-		if self.episode is None:
-			e_match = re.search(r'\b[eE](\d{1,2})\b', self.title)
-			if e_match:
-				self.is_tv = True
+		e_match = re.search(r'\b[eE](\d{1,2})\b', self.title)
+		if e_match:
+			self.is_tv = True
+			if self.episode is None:
 				self.episode = int(e_match.group(1))
-				if tv_match_pos is None or e_match.start() < tv_match_pos:
-					tv_match_pos = e_match.start()
+			if tv_match_pos is None or e_match.start() < tv_match_pos:
+				tv_match_pos = e_match.start()
 
 		# 7. Complete Series / Complete Season / Season Pack / Series Pack keywords
-		if not self.is_tv:
-			series_kw = re.search(r'\b(?:complete[\s._-]+(?:series|season)|season[\s._-]+pack|series[\s._-]+pack)\b', title_lower)
-			if series_kw:
-				self.is_tv = True
-				if tv_match_pos is None or series_kw.start() < tv_match_pos:
-					tv_match_pos = series_kw.start()
+		series_kw = re.search(r'\b(?:complete[\s._-]+(?:series|season)|season[\s._-]+pack|series[\s._-]+pack)\b', title_lower)
+		if series_kw:
+			self.is_tv = True
+			if tv_match_pos is None or series_kw.start() < tv_match_pos:
+				tv_match_pos = series_kw.start()
 
 		# Determine if TV release is a Season Pack or Complete Series
 		if self.is_tv:
@@ -161,13 +163,29 @@ class TorrentResult:
 		raw_clean = re.sub(r'[\.\-\_\+\[\]\(\)\:\,]', ' ', raw_clean)
 		self.clean_title = ' '.join(raw_clean.split()).strip()
 
-		# Check for season subtitle following season/episode notation
+		# Check for season subtitle following season/episode notation (e.g. S03: The Ed Gein Story)
 		sub_match = re.search(r'\b[sS]\d{1,2}[\s._-]*[:\-][\s._-]*([A-Za-z0-9\s._-]+?)(?=[\s._-]*(?:\d{3,4}p|4k|8k|web|bluray|hdtv|nf|\(|\[|$))', self.title)
 		if sub_match:
 			sub_text = re.sub(r'[\.\-\_\+\[\]\(\)\:\,]', ' ', sub_match.group(1))
 			sub_clean = ' '.join(sub_text.split()).strip()
-			if sub_clean and sub_clean.lower() not in ['complete', 'season', 'pack', 'series']:
+			if (
+				sub_clean and
+				not re.search(r'\b(?:complete|season|seasons|pack|series)\b', sub_clean, re.IGNORECASE) and
+				not re.match(r'^(?:[sS]\d{1,2}|[eE]\d{1,2}|\d+)\b', sub_clean)
+			):
 				self.clean_title = f"{self.clean_title} {sub_clean}".strip()
+
+		# Strip any trailing season, episode, or packaging tokens that might have lingered in clean_title
+		while True:
+			cleaned = re.sub(
+				r'[\s._-]+(?:[sS]\d{1,2}[eE]\d{1,2}|[sS]eason[\s._-]*\d{1,2}|[sS]\d{1,2}|[eE]pisode[\s._-]*\d{1,2}|[eE]\d{1,2}|complete|season|pack|series)$',
+				'',
+				self.clean_title,
+				flags=re.IGNORECASE
+			).strip()
+			if cleaned == self.clean_title:
+				break
+			self.clean_title = cleaned
 
 		# Codec detection
 		codec_match = re.search(r'\b(x264|x265|hevc|h264|h\.264|h265|h\.265|av1|divx|xvid)\b', title_lower)

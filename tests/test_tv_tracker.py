@@ -372,6 +372,68 @@ class TestTvApiRoutes(unittest.TestCase):
 		self.assertTrue(eps[1]["on_server"])
 		self.assertFalse(eps[2]["on_server"])
 
+	@patch('requests.get')
+	def test_compound_season_title_cleaning_and_tmdb_lookup(self, mock_get):
+		# 1. Test TorrentResult parsing with compound season tokens
+		res1 = TorrentResult(
+			title="Ozark.S01.Season.1 Complete .XviD-AFG",
+			size=10 * 1024 * 1024 * 1024,
+			download_url="magnet:?xt=urn:btih:ozark1",
+			seeders=25,
+			leechers=3,
+			indexer="1337x"
+		)
+		self.assertEqual(res1.clean_title, "Ozark")
+		self.assertEqual(res1.season, 1)
+		self.assertTrue(res1.is_season_pack)
+
+		res2 = TorrentResult(
+			title="Severance S01-S02 Complete 1080p WEB-DL",
+			size=20 * 1024 * 1024 * 1024,
+			download_url="magnet:?xt=urn:btih:sevmulti",
+			seeders=30,
+			leechers=5,
+			indexer="1337x"
+		)
+		self.assertEqual(res2.clean_title, "Severance")
+		self.assertEqual(res2.season, 1)
+		self.assertTrue(res2.is_season_pack)
+
+		# 2. Test TmdbClient sanitization of "Ozark S01"
+		mock_resp = MagicMock()
+		mock_resp.json.return_value = {
+			"results": [
+				{
+					"id": 63333,
+					"name": "Ozark",
+					"first_air_date": "2017-07-21",
+					"poster_path": "/ozark.jpg"
+				}
+			]
+		}
+		mock_get.return_value = mock_resp
+		client = TmdbClient(api_key="dummy_key")
+		tmdb_res = client.search_tv("Ozark S01")
+		self.assertIsNotNone(tmdb_res)
+		self.assertEqual(tmdb_res["id"], 63333)
+		# Verify that TMDb was queried with sanitized query "Ozark"
+		mock_get.assert_called_with(
+			"https://api.themoviedb.org/3/search/tv",
+			params={"api_key": "dummy_key", "query": "Ozark"},
+			timeout=8
+		)
+
+		# 3. Test find_tv_show_dir with query having season attached
+		plex_tv_dir = os.path.join(self.temp_dir, "TV SHOWS", "Ozark (2017) {tmdb-63333}")
+		os.makedirs(plex_tv_dir, exist_ok=True)
+		found_dir = find_tv_show_dir(
+			library_root=self.temp_dir,
+			tv_id=None,
+			title="Ozark S01"
+		)
+		self.assertEqual(found_dir, plex_tv_dir)
+
 
 if __name__ == '__main__':
 	unittest.main()
+

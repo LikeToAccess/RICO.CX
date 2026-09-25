@@ -910,7 +910,8 @@ async function toggleTvDrawer(index, item) {
     </div>
   `;
 
-  const showData = await getTvDetails(item.tmdb_id, item.clean_title, item.year);
+  const cleanTitle = (item.clean_title || "").replace(/\b(?:s\d{1,2}|season\s*\d{1,2})\b/gi, '').trim() || item.clean_title;
+  const showData = await getTvDetails(item.tmdb_id, cleanTitle, item.year);
   if (!showData || !showData.seasons || showData.seasons.length === 0) {
     drawerEl.innerHTML = '<div class="empty-state" style="padding: 1rem;">No season details available.</div>';
     return;
@@ -929,7 +930,8 @@ function openTvTrackerModal(item) {
     document.body.appendChild(modalEl);
   }
   modalEl.style.display = "flex";
-  const displayTitle = item.clean_title || item.title || "TV Show";
+  const rawTitle = item.clean_title || item.title || "TV Show";
+  const displayTitle = rawTitle.replace(/\b(?:s\d{1,2}|season\s*\d{1,2})\b/gi, '').trim() || rawTitle;
   modalEl.innerHTML = `
     <div class="tv-modal-content">
       <div class="tv-modal-header">
@@ -1021,6 +1023,7 @@ function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, tracker
     }
 
     const sStr = String(seasonNum).padStart(2, '0');
+    const cleanShowTitle = (showData.title || "").replace(/\b(?:s\d{1,2}|season\s*\d{1,2})\b/gi, '').trim() || showData.title;
     let statusBadgeHtml = "";
     if (seasonData.is_complete) {
       statusBadgeHtml = `<span class="badge-status badge-status-complete">✓ Season Complete (${seasonData.on_server_count}/${seasonData.total_episodes})</span>`;
@@ -1034,7 +1037,7 @@ function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, tracker
     (seasonData.episodes || []).forEach(ep => {
       const eStr = String(ep.episode_number).padStart(2, '0');
       const epCode = `S${sStr}E${eStr}`;
-      const searchTarget = `${showData.title} ${epCode}`;
+      const searchTarget = `${cleanShowTitle} ${epCode}`;
 
       let epStatusBadge = "";
       let epActionBtn = "";
@@ -1074,7 +1077,7 @@ function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, tracker
           <span class="tv-season-title">Season ${seasonNum} • ${seasonData.total_episodes} Episodes</span>
           ${statusBadgeHtml}
         </div>
-        <button class="btn btn-primary btn-season-pack-grab" data-query="${escapeHtml(showData.title)} S${sStr}">
+        <button class="btn btn-primary btn-season-pack-grab" data-query="${escapeHtml(cleanShowTitle)} S${sStr}">
           ⚡ Grab Season ${seasonNum} Pack
         </button>
       </div>

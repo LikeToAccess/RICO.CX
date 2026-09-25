@@ -1488,7 +1488,13 @@ def find_tv_show_dir(
 
 	# Priority 2: Match by normalized title
 	if title:
-		norm_title = re.sub(r'[^a-z0-9]', '', title.lower())
+		cleaned_title = re.sub(
+			r'\b(?:[sS]\d{1,2}[eE]\d{1,2}|[sS]eason[\s._-]*\d{1,2}|[sS]\d{1,2}|[eE]pisode[\s._-]*\d{1,2}|[eE]\d{1,2})\b',
+			'',
+			title,
+			flags=re.IGNORECASE
+		).strip()
+		norm_title = re.sub(r'[^a-z0-9]', '', (cleaned_title or title).lower())
 		if norm_title:
 			year_str = str(year).strip() if year else ""
 			best_entry = None
