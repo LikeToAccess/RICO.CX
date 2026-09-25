@@ -268,9 +268,9 @@ class TorrentResult:
 		if has_hdr:
 			score += 20.0
 
-		# 6. File Size Penalty (-1 pt per 2 GB, max -40 pts)
+		# 6. File Size Penalty (-0.7 pt per GB / -1 pt per ~1.4 GB, max -48 pts)
 		gb = self.size / (1024 ** 3)
-		score -= min(40.0, gb * 0.5)
+		score -= min(48.0, gb * 0.7)
 
 		# 7. Seeders (Diminishing logarithmic scale)
 		if self.seeders > 0:
