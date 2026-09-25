@@ -368,15 +368,15 @@ select.form-input {
   font-size: 0.65rem;
   font-weight: 600;
   padding: 0.1rem 0.45rem;
-  background-color: rgba(56, 189, 248, 0.08);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  color: #38bdf8;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-hover);
+  color: var(--text-primary);
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .media-card.in-database {
-  border-left: 3px solid rgba(56, 189, 248, 0.6);
+  border-left: 3px solid var(--border-hover);
 }
 
 .media-meta-line {
@@ -410,37 +410,37 @@ select.form-input {
 
 .tag-badge.tag-badge-in-db {
   border-style: solid;
-  border-color: rgba(56, 189, 248, 0.5);
-  color: #38bdf8;
-  background-color: rgba(56, 189, 248, 0.08);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 .tag-badge.tag-badge-alt-version {
   border-style: dashed;
-  border-color: rgba(251, 146, 60, 0.4);
-  color: #fb923c;
-  background-color: rgba(251, 146, 60, 0.05);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #d4d4d8;
+  background-color: transparent;
 }
 
 .tag-badge.tag-badge-recommended {
   border-style: solid;
-  border-color: rgba(234, 179, 8, 0.4);
-  color: #eab308;
-  background-color: rgba(234, 179, 8, 0.05);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.06);
 }
 
 .tag-badge.tag-badge-ai {
   border-style: dashed;
-  border-color: rgba(168, 85, 247, 0.35);
-  color: #c084fc;
-  background-color: rgba(168, 85, 247, 0.05);
+  border-color: var(--border-color);
+  color: var(--text-muted);
+  background-color: transparent;
 }
 
 .tag-badge.tag-badge-cam {
   border-style: dashed;
   border-color: rgba(239, 68, 68, 0.35);
-  color: #f87171;
-  background-color: rgba(239, 68, 68, 0.05);
+  color: #fca5a5;
+  background-color: rgba(239, 68, 68, 0.04);
 }
 
 .media-card-actions {
@@ -1129,7 +1129,7 @@ select.form-input {
 }
 
 .popular-checkbox-label input[type="checkbox"] {
-  accent-color: #38bdf8;
+  accent-color: var(--border-focus);
   cursor: pointer;
 }
 
@@ -1155,7 +1155,7 @@ select.form-input {
 }
 
 .popular-card.in-database {
-  border-left: 3px solid rgba(56, 189, 248, 0.7);
+  border-left: 3px solid var(--border-hover);
 }
 
 .popular-poster-wrap {
@@ -1194,14 +1194,14 @@ select.form-input {
   position: absolute;
   top: 8px;
   left: 8px;
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(0, 0, 0, 0.85);
   backdrop-filter: blur(4px);
-  color: #fbbf24;
+  color: #f4f4f5;
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 2px 7px;
-  border: 1px solid rgba(251, 191, 36, 0.4);
+  border: 1px solid var(--border-hover);
   letter-spacing: 0.02em;
 }
 
@@ -1209,14 +1209,14 @@ select.form-input {
   position: absolute;
   top: 8px;
   right: 8px;
-  background: rgba(15, 23, 42, 0.88);
+  background: rgba(9, 9, 11, 0.88);
   backdrop-filter: blur(4px);
-  color: #38bdf8;
+  color: #e4e4e7;
   font-family: var(--font-mono);
   font-size: 0.65rem;
-  font-weight: 700;
+  font-weight: 600;
   padding: 2px 6px;
-  border: 1px solid rgba(56, 189, 248, 0.5);
+  border: 1px solid var(--border-hover);
   letter-spacing: 0.04em;
   display: flex;
   align-items: center;
@@ -1288,14 +1288,14 @@ select.form-input {
 }
 
 .btn-server-saved {
-  background-color: rgba(56, 189, 248, 0.08);
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  color: #38bdf8;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-hover);
+  color: var(--text-primary);
 }
 
 .btn-server-saved:hover {
-  background-color: rgba(56, 189, 248, 0.16);
-  border-color: #38bdf8;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-focus);
 }
 
 @media (max-width: 768px) {
@@ -1355,9 +1355,9 @@ select.form-input {
 }
 
 .btn-tv-tracker.active {
-  border-color: #38bdf8;
-  color: #38bdf8;
-  background-color: rgba(56, 189, 248, 0.1);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
 }
 
 .btn-popular-tv-tracker {
@@ -1366,15 +1366,15 @@ select.form-input {
 }
 
 .tag-badge-season-pack {
-  border-color: rgba(168, 85, 247, 0.5) !important;
-  color: #c084fc !important;
-  background-color: rgba(168, 85, 247, 0.08) !important;
+  border: 1px solid var(--border-hover) !important;
+  color: var(--text-primary) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
 }
 
 .tag-badge-episode {
-  border-color: rgba(56, 189, 248, 0.4) !important;
-  color: #38bdf8 !important;
-  background-color: rgba(56, 189, 248, 0.06) !important;
+  border: 1px dashed var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  background-color: transparent !important;
 }
 
 .tv-season-drawer {
@@ -1424,30 +1424,28 @@ select.form-input {
 }
 
 .tv-season-tab.active {
-  border-color: #38bdf8;
-  color: #ffffff;
-  background: rgba(56, 189, 248, 0.15);
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }
 
 .tab-status-dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   display: inline-block;
 }
 
 .tab-status-dot.complete {
   background-color: #10b981;
-  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
 }
 
 .tab-status-dot.partial {
   background-color: #f59e0b;
-  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
 }
 
 .tab-status-dot.missing {
-  background-color: #71717a;
+  background-color: var(--text-muted);
 }
 
 .tv-season-content {
@@ -1482,7 +1480,7 @@ select.form-input {
 .badge-status {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
+  padding: 0.15rem 0.45rem;
   border-radius: 2px;
   display: inline-flex;
   align-items: center;
@@ -1490,37 +1488,40 @@ select.form-input {
 }
 
 .badge-status-complete {
-  background: rgba(16, 185, 129, 0.12);
+  background: rgba(16, 185, 129, 0.08);
   color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
 .badge-status-missing {
-  background: rgba(245, 158, 11, 0.12);
+  background: rgba(245, 158, 11, 0.08);
   color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }
 
 .badge-status-not-downloaded {
-  background: rgba(113, 113, 122, 0.12);
-  color: #a1a1aa;
-  border: 1px solid rgba(113, 113, 122, 0.35);
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-color);
 }
 
 .btn-season-pack-grab {
+  font-family: var(--font-mono);
   font-size: 0.75rem;
-  padding: 0.35rem 0.85rem;
-  background: #38bdf8;
-  color: #000000;
-  font-weight: 600;
-  border: none;
-  border-radius: 3px;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  font-weight: 500;
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .btn-season-pack-grab:hover {
-  background: #7dd3fc;
+  background: #27272a;
+  border-color: var(--border-focus);
+  color: #ffffff;
 }
 
 .tv-episodes-list {
@@ -1539,21 +1540,22 @@ select.form-input {
   gap: 0.75rem;
   padding: 0.45rem 0.75rem;
   background: var(--bg-hover);
-  border: 1px solid rgba(39, 39, 42, 0.6);
-  border-radius: 3px;
-  transition: background 0.15s ease;
+  border: 1px solid var(--border-color);
+  border-radius: 2px;
+  transition: all 0.15s ease;
 }
 
 .tv-episode-row:hover {
-  background: rgba(39, 39, 42, 0.9);
+  background: #1f1f23;
+  border-color: var(--border-hover);
 }
 
 .tv-episode-row.on-server {
-  border-left: 3px solid #10b981;
+  border-left: 2px solid var(--border-hover);
 }
 
 .tv-episode-row.missing {
-  border-left: 3px solid #f59e0b;
+  border-left: 2px solid transparent;
 }
 
 .tv-ep-info {
@@ -1568,7 +1570,7 @@ select.form-input {
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 600;
-  color: #38bdf8;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -1597,15 +1599,28 @@ select.form-input {
 .btn-ep-grab {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  padding: 0.25rem 0.55rem;
-  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  font-weight: 500;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-ep-grab:hover {
+  background: #27272a;
+  border-color: var(--border-focus);
+  color: #ffffff;
 }
 
 .btn-ep-search {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  padding: 0.25rem 0.55rem;
-  opacity: 0.75;
+  padding: 0.2rem 0.55rem;
+  border-radius: 2px;
+  color: var(--text-secondary);
 }
 
 .btn-ep-search:hover {

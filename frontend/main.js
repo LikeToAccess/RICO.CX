@@ -1102,7 +1102,7 @@ function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, tracker
     if (seasonData.is_complete) {
       statusBadgeHtml = `<span class="badge-status badge-status-complete">✓ Season Complete (${seasonData.on_server_count}/${seasonData.total_episodes})</span>`;
     } else if (seasonData.missing_count > 0) {
-      statusBadgeHtml = `<span class="badge-status badge-status-missing">⚠️ ${seasonData.missing_count} Missing (${seasonData.on_server_count}/${seasonData.total_episodes} on server)</span>`;
+      statusBadgeHtml = `<span class="badge-status badge-status-missing">${seasonData.missing_count} Missing (${seasonData.on_server_count}/${seasonData.total_episodes} on server)</span>`;
     } else {
       statusBadgeHtml = `<span class="badge-status badge-status-not-downloaded">0/${seasonData.total_episodes} on Server</span>`;
     }
@@ -1122,8 +1122,8 @@ function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, tracker
         epStatusBadge = `<span class="badge-status badge-status-complete" title="${titleTooltip}">✓ On Server</span>`;
         epActionBtn = `<button class="btn btn-secondary btn-sm btn-ep-search" data-query="${escapeHtml(searchTarget)}">Search</button>`;
       } else if (ep.has_aired) {
-        epStatusBadge = `<span class="badge-status badge-status-missing">⚠️ Missing</span>`;
-        epActionBtn = `<button class="btn btn-primary btn-sm btn-ep-grab" data-query="${escapeHtml(searchTarget)}">Get E${eStr}</button>`;
+        epStatusBadge = `<span class="badge-status badge-status-missing">Missing</span>`;
+        epActionBtn = `<button class="btn btn-secondary btn-sm btn-ep-grab" data-query="${escapeHtml(searchTarget)}">Get E${eStr}</button>`;
       } else {
         const dateLabel = ep.air_date || "TBA";
         epStatusBadge = `<span class="badge-status badge-status-not-downloaded">Airs ${escapeHtml(dateLabel)}</span>`;
@@ -1151,8 +1151,8 @@ function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, tracker
           <span class="tv-season-title">Season ${seasonNum} • ${seasonData.total_episodes} Episodes</span>
           ${statusBadgeHtml}
         </div>
-        <button class="btn btn-primary btn-season-pack-grab" data-query="${escapeHtml(cleanShowTitle)} S${sStr}">
-          ⚡ Grab Season ${seasonNum} Pack
+        <button class="btn btn-secondary btn-season-pack-grab" data-query="${escapeHtml(cleanShowTitle)} S${sStr}">
+          Grab Season ${seasonNum} Pack
         </button>
       </div>
       <div class="tv-episodes-list">
