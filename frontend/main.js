@@ -466,6 +466,7 @@ function renderDashboardContent() {
           <div class="form-group">
             <label class="form-label" for="filter-sort-by">Sort By</label>
             <select id="filter-sort-by" class="form-input">
+              <option value="relevancy-desc">Relevancy (Recommended)</option>
               <option value="seeds-desc">Seeds (High to Low)</option>
               <option value="size-desc">Size (Large to Small)</option>
               <option value="size-asc">Size (Small to Large)</option>
@@ -533,12 +534,18 @@ function getFilteredResults() {
   
   // Apply sorting
   const sortBy = document.getElementById("filter-sort-by").value;
-  if (sortBy === "seeds-desc") {
+  if (sortBy === "relevancy-desc") {
+    filtered.sort((a, b) => (b.downloads[0]?.relevancy_score ?? 0) - (a.downloads[0]?.relevancy_score ?? 0));
+    filtered.forEach(c => c.downloads.sort((a, b) => (b.relevancy_score ?? 0) - (a.relevancy_score ?? 0) || b.seeders - a.seeders));
+  } else if (sortBy === "seeds-desc") {
     filtered.sort((a, b) => b.downloads[0].seeders - a.downloads[0].seeders);
+    filtered.forEach(c => c.downloads.sort((a, b) => b.seeders - a.seeders));
   } else if (sortBy === "size-desc") {
     filtered.sort((a, b) => b.downloads[0].size - a.downloads[0].size);
+    filtered.forEach(c => c.downloads.sort((a, b) => b.size - a.size));
   } else if (sortBy === "size-asc") {
     filtered.sort((a, b) => a.downloads[0].size - b.downloads[0].size);
+    filtered.forEach(c => c.downloads.sort((a, b) => a.size - b.size));
   } else if (sortBy === "title-asc") {
     filtered.sort((a, b) => a.clean_title.localeCompare(b.clean_title));
   }
@@ -832,9 +839,13 @@ function renderSearchResults() {
       const displaySize = formatBytes(dl.size);
       const isSaved = dl.in_database || dl.downloaded;
       const marker = isSaved ? " • [ON SERVER]" : "";
+      const isTopRecommended = dlIdx === 0 && (dl.relevancy_score ?? 0) > 0;
+      const recMarker = isTopRecommended ? " • Recommended" : "";
+      const aiMarker = dl.is_ai ? " • [AI]" : "";
+      const camMarker = dl.is_cam ? " • [CAM/TS]" : "";
       optionsHtml += `
         <option value="${dlIdx}">
-          [${displaySize} | Seeds: ${escapeHtml(dl.seeders)}]${marker} - ${escapeHtml(dl.title)}
+          [${displaySize} | Seeds: ${escapeHtml(dl.seeders)}]${recMarker}${marker}${aiMarker}${camMarker} - ${escapeHtml(dl.title)}
         </option>
       `;
     });
@@ -913,6 +924,16 @@ function renderSearchResults() {
       dlOption.audio.forEach(aud => {
         tagsContainer.innerHTML += `<span class="tag-badge">${escapeHtml(aud)}</span>`;
       });
+      
+      if (dlOption.is_ai) {
+        tagsContainer.innerHTML += `<span class="tag-badge tag-badge-ai">AI Upscale</span>`;
+      }
+      if (dlOption.is_cam) {
+        tagsContainer.innerHTML += `<span class="tag-badge tag-badge-cam">CAM / TS</span>`;
+      }
+      if (dlOption === downloads[0] && (dlOption.relevancy_score ?? 0) > 0) {
+        tagsContainer.innerHTML += `<span class="tag-badge tag-badge-recommended">★ Recommended</span>`;
+      }
       
       tagsContainer.innerHTML += `<span class="tag-badge" style="border-style: solid; opacity: 0.6;">${escapeHtml(dlOption.indexer)}</span>`;
       
@@ -1401,7 +1422,7 @@ function setupDashboardContentListeners() {
     document.getElementById("filter-resolution").value = saved.resolution || "";
     document.getElementById("filter-min-seeds").value = saved.minSeeds || "0";
     document.getElementById("filter-max-size").value = saved.maxSize || "0";
-    document.getElementById("filter-sort-by").value = saved.sortBy || "seeds-desc";
+    document.getElementById("filter-sort-by").value = saved.sortBy || "relevancy-desc";
     
     if (saved.filtersOpen) {
       filtersPanel.style.display = "block";
@@ -1433,7 +1454,7 @@ function setupDashboardContentListeners() {
       document.getElementById("filter-resolution").value = "";
       document.getElementById("filter-min-seeds").value = "0";
       document.getElementById("filter-max-size").value = "0";
-      document.getElementById("filter-sort-by").value = "seeds-desc";
+      document.getElementById("filter-sort-by").value = "relevancy-desc";
       state.searchResults = [];
       saveRecentSearch();
       renderSearchResults();

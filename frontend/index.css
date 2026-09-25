@@ -422,6 +422,27 @@ select.form-input {
   background-color: rgba(251, 146, 60, 0.05);
 }
 
+.tag-badge.tag-badge-recommended {
+  border-style: solid;
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #eab308;
+  background-color: rgba(234, 179, 8, 0.05);
+}
+
+.tag-badge.tag-badge-ai {
+  border-style: dashed;
+  border-color: rgba(168, 85, 247, 0.35);
+  color: #c084fc;
+  background-color: rgba(168, 85, 247, 0.05);
+}
+
+.tag-badge.tag-badge-cam {
+  border-style: dashed;
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
 .media-card-actions {
   display: flex;
   gap: 0.5rem;

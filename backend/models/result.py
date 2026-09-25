@@ -1,3 +1,4 @@
+import math
 import re
 from typing import Any, Dict, List, Optional, Tuple, Type, TypeVar
 
@@ -40,6 +41,9 @@ class TorrentResult:
 		self.season: Optional[int] = None
 		self.episode: Optional[int] = None
 		self.is_tv: bool = False
+		self.is_ai: bool = False
+		self.is_cam: bool = False
+		self.relevancy_score: float = 0.0
 
 		self._parse_metadata()
 
@@ -198,6 +202,92 @@ class TorrentResult:
 				if label not in self.audio:
 					self.audio.append(label)
 
+		# AI upscale detection
+		ai_match = re.search(
+			r'\b(?:ai[\s._-]*(?:upscale[d]?|enhance[d]?|remaster[a-z]*|uhd|4k|2160p)|upscale[d]?|topaz|esrgan|rife|waifu2x)\b',
+			title_lower
+		)
+		if ai_match:
+			self.is_ai = True
+
+		# CAM / Telesync / Telecine detection
+		cam_match = re.search(
+			r'\b(?:cam|camrip|hdcam|hd[\s._-]?ts|telesync|pdvd|telecine|hd[\s._-]?tc|ts|tc)\b',
+			title_lower
+		)
+		if cam_match:
+			self.is_cam = True
+
+		self.relevancy_score = self._calculate_relevancy_score()
+
+	def _calculate_relevancy_score(self) -> float:
+		"""
+		Calculates a relevancy score based on quality preferences:
+		Resolution > Codec > Atmos > Dolby Vision > HDR > File Size (penalty) > Seeders > AI (penalty) > CAM (disqualification).
+		"""
+		score = 0.0
+
+		# 1. Resolution
+		res_weights = {
+			"2160p": 100.0,
+			"4320p": 100.0,
+			"1080p": 60.0,
+			"720p": 25.0,
+			"480p": 10.0,
+			"Unknown": 5.0
+		}
+		score += res_weights.get(self.resolution, 5.0)
+
+		# 2. Codec
+		codec_weights = {
+			"AV1": 45.0,
+			"HEVC": 40.0,
+			"X265": 40.0,
+			"H265": 40.0,
+			"H264": 20.0,
+			"X264": 20.0,
+			"AVC": 20.0,
+			"XVID": -20.0,
+			"DIVX": -20.0
+		}
+		score += codec_weights.get(self.codec, 0.0)
+
+		# 3. Audio (Dolby Atmos)
+		title_lower = self.title.lower()
+		has_atmos = "Atmos" in self.audio or bool(re.search(r'\batmos\b', title_lower))
+		if has_atmos:
+			score += 30.0
+
+		# 4. Dolby Vision
+		has_dv = "DV" in self.features or bool(re.search(r'\b(?:dv|dolby[\s._-]?vision)\b', title_lower))
+		if has_dv:
+			score += 25.0
+
+		# 5. HDR (HDR, HDR10, HDR10+)
+		has_hdr = any(x in self.features for x in ["HDR", "HDR10", "HDR10+"]) or bool(re.search(r'\bhdr(?:10(?:\+)?)?\b', title_lower))
+		if has_hdr:
+			score += 20.0
+
+		# 6. File Size Penalty (-1 pt per 2 GB, max -40 pts)
+		gb = self.size / (1024 ** 3)
+		score -= min(40.0, gb * 0.5)
+
+		# 7. Seeders (Diminishing logarithmic scale)
+		if self.seeders > 0:
+			score += min(50.0, 15.0 * math.log10(self.seeders + 1))
+		else:
+			score -= 50.0
+
+		# 8. AI Penalty (Guarantees dropping below 720p releases)
+		if self.is_ai:
+			score -= 200.0
+
+		# 9. CAM / Telesync Penalty (Quarantines theatrical recordings at the bottom)
+		if self.is_cam:
+			score -= 300.0
+
+		return round(score, 1)
+
 	@classmethod
 	def from_prowlarr(cls: Type[T], data: Dict[str, Any]) -> T:
 		title = data.get("title", "Unknown Release")
@@ -239,7 +329,10 @@ class TorrentResult:
 			"audio": self.audio,
 			"season": self.season,
 			"episode": self.episode,
-			"is_tv": self.is_tv
+			"is_tv": self.is_tv,
+			"is_ai": self.is_ai,
+			"is_cam": self.is_cam,
+			"relevancy_score": self.relevancy_score
 		}
 
 
@@ -307,7 +400,7 @@ class AggregatedResult:
 			groups[key].add_result(r)
 
 		for agg in groups.values():
-			agg.downloads.sort(key=lambda x: x.seeders, reverse=True)
+			agg.downloads.sort(key=lambda x: (x.relevancy_score, x.seeders), reverse=True)
 
 		aggregated_list = list(groups.values())
 		aggregated_list.sort(key=lambda x: sum(d.seeders for d in x.downloads), reverse=True)

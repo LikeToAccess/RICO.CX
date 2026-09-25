@@ -71,6 +71,11 @@ class TestAPI(unittest.TestCase):
 		self.assertEqual(data['type'], 'search_results')
 		self.assertTrue(len(data['data']) > 0)
 		self.assertEqual(data['data'][0]['clean_title'], 'Inception')
+		dl = data['data'][0]['downloads'][0]
+		self.assertIn('relevancy_score', dl)
+		self.assertIn('is_ai', dl)
+		self.assertIn('is_cam', dl)
+		self.assertGreater(dl['relevancy_score'], 0)
 
 	def test_search_magnet(self):
 		magnet = "magnet:?xt=urn:btih:ed0c184478144062828b211f6d3f3f504386b72d&dn=Avatar+2009"
