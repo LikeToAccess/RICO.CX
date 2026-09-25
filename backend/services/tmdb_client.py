@@ -240,7 +240,7 @@ class TmdbClient:
 		if not self.api_key or not cards:
 			return
 
-		cards_to_resolve = [c for c in cards if getattr(c, 'poster_url', None) is None]
+		cards_to_resolve = [c for c in cards if getattr(c, 'poster_url', None) is None or getattr(c, 'tmdb_id', None) is None]
 		if not cards_to_resolve:
 			return
 
@@ -252,6 +252,8 @@ class TmdbClient:
 					res = self.search_movie(card.clean_title, card.year)
 				if res:
 					card.poster_url = res.get("poster_url")
+					if hasattr(card, 'tmdb_id'):
+						card.tmdb_id = res.get("id")
 			except Exception as e:  # pylint: disable=broad-exception-caught
 				logger.debug("Parallel TMDb resolution failed for %s: %s", getattr(card, 'clean_title', ''), e)
 
@@ -309,6 +311,125 @@ class TmdbClient:
 		except Exception as exc:  # pylint: disable=broad-exception-caught
 			logger.error("TMDB get_episode_name failed for TV ID %s S%dE%d: %s", tv_id, season, episode, exc)
 		return None
+
+	def get_tv_details(self, tv_id: int) -> Optional[Dict[str, Any]]:
+		"""
+		Returns TV show details including season summaries from TMDB.
+		Cached in memory for instant repeat lookups.
+		"""
+		if not self.api_key or not tv_id:
+			return None
+
+		cached = self._get_from_cache("tv_details", str(tv_id), None)
+		if cached is not None:
+			return cached[1]
+
+		url = f"{self.base_url}/tv/{tv_id}"
+		params = {"api_key": self.api_key}
+		try:
+			resp = requests.get(url, params=params, timeout=8)
+			resp.raise_for_status()
+			data = resp.json()
+
+			first_air = str(data.get("first_air_date") or "")
+			year_val: Optional[int] = None
+			if first_air:
+				try:
+					year_val = int(first_air.split("-")[0])
+				except (ValueError, IndexError):
+					year_val = None
+
+			poster_path = data.get("poster_path")
+			poster_url = f"https://image.tmdb.org/t/p/w300{poster_path}" if poster_path else None
+			backdrop_path = data.get("backdrop_path")
+			backdrop_url = f"https://image.tmdb.org/t/p/original{backdrop_path}" if backdrop_path else None
+
+			seasons: List[Dict[str, Any]] = []
+			for s in data.get("seasons", []):
+				if isinstance(s, dict):
+					s_num = s.get("season_number")
+					if isinstance(s_num, int) and s_num > 0:
+						s_poster = s.get("poster_path")
+						seasons.append({
+							"season_number": s_num,
+							"name": s.get("name") or f"Season {s_num}",
+							"episode_count": s.get("episode_count", 0),
+							"air_date": s.get("air_date") or "",
+							"poster_url": f"https://image.tmdb.org/t/p/w185{s_poster}" if s_poster else None,
+							"overview": s.get("overview") or ""
+						})
+			seasons.sort(key=lambda x: x["season_number"])
+
+			genre_names = [g["name"] for g in data.get("genres", []) if isinstance(g, dict) and "name" in g]
+
+			result = {
+				"id": data.get("id"),
+				"name": data.get("name") or "",
+				"first_air_date": first_air,
+				"year": year_val,
+				"number_of_seasons": data.get("number_of_seasons", len(seasons)),
+				"number_of_episodes": data.get("number_of_episodes", 0),
+				"overview": data.get("overview") or "",
+				"poster_url": poster_url,
+				"backdrop_url": backdrop_url,
+				"status": data.get("status") or "",
+				"genres": genre_names,
+				"seasons": seasons
+			}
+			self._save_to_cache("tv_details", str(tv_id), None, result)
+			return result
+		except Exception as exc:  # pylint: disable=broad-exception-caught
+			logger.error("TMDB get_tv_details failed for ID %s: %s", tv_id, exc)
+			return None
+
+	def get_season_details(self, tv_id: int, season: int) -> Optional[Dict[str, Any]]:
+		"""
+		Returns detailed season information including episode list from TMDB.
+		Cached in memory for instant repeat lookups.
+		"""
+		if not self.api_key or not tv_id or season is None:
+			return None
+
+		cached = self._get_from_cache("season_details", f"{tv_id}:{season}", None)
+		if cached is not None:
+			return cached[1]
+
+		url = f"{self.base_url}/tv/{tv_id}/season/{season}"
+		params = {"api_key": self.api_key}
+		try:
+			resp = requests.get(url, params=params, timeout=8)
+			resp.raise_for_status()
+			data = resp.json()
+
+			episodes: List[Dict[str, Any]] = []
+			for ep in data.get("episodes", []):
+				if isinstance(ep, dict):
+					still_path = ep.get("still_path")
+					episodes.append({
+						"episode_number": ep.get("episode_number"),
+						"name": ep.get("name") or f"Episode {ep.get('episode_number')}",
+						"air_date": ep.get("air_date") or "",
+						"overview": ep.get("overview") or "",
+						"vote_average": round(float(ep.get("vote_average", 0.0)), 1),
+						"still_url": f"https://image.tmdb.org/t/p/w300{still_path}" if still_path else None
+					})
+			episodes.sort(key=lambda x: (x["episode_number"] is None, x["episode_number"]))
+
+			poster_path = data.get("poster_path")
+			result = {
+				"id": data.get("id"),
+				"season_number": data.get("season_number", season),
+				"name": data.get("name") or f"Season {season}",
+				"overview": data.get("overview") or "",
+				"air_date": data.get("air_date") or "",
+				"poster_url": f"https://image.tmdb.org/t/p/w300{poster_path}" if poster_path else None,
+				"episodes": episodes
+			}
+			self._save_to_cache("season_details", f"{tv_id}:{season}", None, result)
+			return result
+		except Exception as exc:  # pylint: disable=broad-exception-caught
+			logger.error("TMDB get_season_details failed for TV ID %s S%d: %s", tv_id, season, exc)
+			return None
 
 	def get_trending(
 		self,

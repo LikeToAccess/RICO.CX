@@ -1340,3 +1340,342 @@ select.form-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   TV Show Season & Missing Episode Tracker
+   ========================================================================== */
+
+.btn-tv-tracker {
+  white-space: nowrap;
+  font-size: 0.8rem;
+  padding: 0 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-tv-tracker.active {
+  border-color: #38bdf8;
+  color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.1);
+}
+
+.btn-popular-tv-tracker {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.tag-badge-season-pack {
+  border-color: rgba(168, 85, 247, 0.5) !important;
+  color: #c084fc !important;
+  background-color: rgba(168, 85, 247, 0.08) !important;
+}
+
+.tag-badge-episode {
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  color: #38bdf8 !important;
+  background-color: rgba(56, 189, 248, 0.06) !important;
+}
+
+.tv-season-drawer {
+  background: rgba(9, 9, 11, 0.85);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  margin-top: 0.75rem;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  animation: tvDrawerFadeIn 0.2s ease-in-out;
+}
+
+@keyframes tvDrawerFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tv-season-tabs {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  scrollbar-width: thin;
+}
+
+.tv-season-tab {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  padding: 0.35rem 0.65rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.tv-season-tab:hover {
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.tv-season-tab.active {
+  border-color: #38bdf8;
+  color: #ffffff;
+  background: rgba(56, 189, 248, 0.15);
+}
+
+.tab-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.tab-status-dot.complete {
+  background-color: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+}
+
+.tab-status-dot.partial {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+}
+
+.tab-status-dot.missing {
+  background-color: #71717a;
+}
+
+.tv-season-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tv-season-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tv-season-header-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tv-season-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.badge-status {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.badge-status-complete {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.badge-status-missing {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badge-status-not-downloaded {
+  background: rgba(113, 113, 122, 0.12);
+  color: #a1a1aa;
+  border: 1px solid rgba(113, 113, 122, 0.35);
+}
+
+.btn-season-pack-grab {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.85rem;
+  background: #38bdf8;
+  color: #000000;
+  font-weight: 600;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.btn-season-pack-grab:hover {
+  background: #7dd3fc;
+}
+
+.tv-episodes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 420px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.tv-episode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  background: var(--bg-hover);
+  border: 1px solid rgba(39, 39, 42, 0.6);
+  border-radius: 3px;
+  transition: background 0.15s ease;
+}
+
+.tv-episode-row:hover {
+  background: rgba(39, 39, 42, 0.9);
+}
+
+.tv-episode-row.on-server {
+  border-left: 3px solid #10b981;
+}
+
+.tv-episode-row.missing {
+  border-left: 3px solid #f59e0b;
+}
+
+.tv-ep-info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.tv-ep-code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.tv-ep-title {
+  font-size: 0.825rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-ep-date {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.tv-ep-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.btn-ep-grab {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.25rem 0.55rem;
+  font-weight: 600;
+}
+
+.btn-ep-search {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.25rem 0.55rem;
+  opacity: 0.75;
+}
+
+.btn-ep-search:hover {
+  opacity: 1;
+}
+
+/* Modal Overlay for Popular / Global TV Tracker */
+.tv-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  animation: tvDrawerFadeIn 0.2s ease;
+}
+
+.tv-modal-content {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  width: 100%;
+  max-width: 840px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+}
+
+.tv-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(24, 24, 27, 0.4);
+}
+
+.tv-modal-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tv-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: color 0.15s ease;
+}
+
+.tv-modal-close:hover {
+  color: #ffffff;
+}
+
+.tv-modal-body {
+  padding: 1.25rem 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}

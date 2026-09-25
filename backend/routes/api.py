@@ -1455,6 +1455,324 @@ def trending():
 	return jsonify(trending_data), 200
 
 
+# TV SHOW TRACKER ENDPOINTS & HELPERS
+def find_tv_show_dir(
+	library_root: str,
+	tv_id: Optional[int],
+	title: str,
+	year: Optional[Union[int, str]] = None
+) -> Optional[str]:
+	"""
+	Finds the local TV show folder within library_root/TV SHOWS.
+	Fast matching prioritizes '{tmdb-<id>}' tags, falling back to normalized title & year.
+	"""
+	if not library_root or not os.path.exists(library_root):
+		return None
+
+	tv_root = os.path.join(library_root, "TV SHOWS")
+	if not os.path.exists(tv_root):
+		tv_root = library_root
+
+	try:
+		entries = [e for e in os.scandir(tv_root) if e.is_dir()]
+	except Exception as exc:
+		logger.error("Failed to scandir %s: %s", tv_root, exc)
+		return None
+
+	# Priority 1: Match by TMDb ID tag e.g. "{tmdb-95396}"
+	if tv_id:
+		tag = f"{{tmdb-{tv_id}}}"
+		for entry in entries:
+			if tag in entry.name:
+				return entry.path
+
+	# Priority 2: Match by normalized title
+	if title:
+		norm_title = re.sub(r'[^a-z0-9]', '', title.lower())
+		if norm_title:
+			year_str = str(year).strip() if year else ""
+			best_entry = None
+			for entry in entries:
+				raw_name = entry.name
+				cleaned = re.sub(r'\{tmdb-\d+\}', '', raw_name, flags=re.IGNORECASE)
+				entry_year_match = re.search(r'\((\d{4})\)', cleaned)
+				entry_year = entry_year_match.group(1) if entry_year_match else ""
+				cleaned_no_year = re.sub(r'\(\d{4}\)', '', cleaned)
+				norm_folder = re.sub(r'[^a-z0-9]', '', cleaned_no_year.lower())
+
+				if norm_folder == norm_title:
+					if year_str and entry_year and entry_year == year_str:
+						return entry.path
+					if not best_entry:
+						best_entry = entry.path
+
+			if best_entry:
+				return best_entry
+
+	return None
+
+
+def scan_season_episodes_on_disk(show_dir: Optional[str], season: int) -> Dict[int, Dict[str, Any]]:
+	"""
+	Scans the season directory within a show directory for local episode video files.
+	Returns a dictionary mapping episode_number -> {filename, size, path}.
+	"""
+	if not show_dir or not os.path.isdir(show_dir) or season is None:
+		return {}
+
+	candidates = [
+		f"Season {season:02d}",
+		f"Season {season}",
+		f"season {season:02d}",
+		f"season {season}",
+		f"S{season:02d}",
+		f"S{season}"
+	]
+
+	season_dir: Optional[str] = None
+	try:
+		with os.scandir(show_dir) as it:
+			for entry in it:
+				if entry.is_dir() and entry.name in candidates:
+					season_dir = entry.path
+					break
+	except Exception as exc:
+		logger.error("Failed to read show directory %s: %s", show_dir, exc)
+		return {}
+
+	search_dirs = [season_dir] if season_dir else [show_dir]
+	video_exts = {".mkv", ".mp4", ".avi", ".m4v", ".webm", ".ts"}
+	episodes: Dict[int, Dict[str, Any]] = {}
+
+	for s_dir in search_dirs:
+		try:
+			with os.scandir(s_dir) as it:
+				for entry in it:
+					if not entry.is_file():
+						continue
+					ext = os.path.splitext(entry.name)[1].lower()
+					if ext not in video_exts:
+						continue
+
+					se_match = re.search(r'[sS](\d{1,2})[eE](\d{1,2})(?:[\-–eE](\d{1,2}))?', entry.name)
+					if se_match:
+						s_val = int(se_match.group(1))
+						if s_val == season:
+							e_start = int(se_match.group(2))
+							e_end = int(se_match.group(3)) if se_match.group(3) else e_start
+							file_stat = entry.stat()
+							for ep in range(e_start, e_end + 1):
+								episodes[ep] = {
+									"filename": entry.name,
+									"size": file_stat.st_size,
+									"path": entry.path
+								}
+							continue
+
+					x_match = re.search(r'\b(\d{1,2})x(\d{1,2})\b', entry.name)
+					if x_match:
+						s_val = int(x_match.group(1))
+						if s_val == season:
+							e_val = int(x_match.group(2))
+							file_stat = entry.stat()
+							episodes[e_val] = {
+								"filename": entry.name,
+								"size": file_stat.st_size,
+								"path": entry.path
+							}
+							continue
+
+					if season_dir:
+						ep_match = re.search(r'\b(?:[eE]pisode|[eE]p|[eE])[\s._-]*(\d{1,2})\b', entry.name, re.IGNORECASE)
+						if ep_match:
+							e_val = int(ep_match.group(1))
+							file_stat = entry.stat()
+							episodes[e_val] = {
+								"filename": entry.name,
+								"size": file_stat.st_size,
+								"path": entry.path
+							}
+		except Exception as exc:
+			logger.error("Failed to scan season dir %s: %s", s_dir, exc)
+
+	return episodes
+
+
+@api_bp.route('/tv/details', methods=['GET'])
+@login_required
+def tv_details():
+	"""
+	Returns TV show season overview with local library completion status.
+	Query params:
+		tv_id: int (TMDb ID, optional if title given)
+		title: str (Show title, optional if tv_id given)
+		year: int (Optional first air year)
+	"""
+	tv_id_arg = request.args.get('tv_id')
+	title_arg = (request.args.get('title') or '').strip()
+	year_arg = request.args.get('year')
+
+	tv_id: Optional[int] = None
+	if tv_id_arg:
+		try:
+			tv_id = int(tv_id_arg)
+		except (ValueError, TypeError):
+			tv_id = None
+
+	year_val: Optional[int] = None
+	if year_arg:
+		try:
+			year_val = int(year_arg)
+		except (ValueError, TypeError):
+			year_val = None
+
+	settings = get_server_settings()
+	tmdb_key = settings.get("tmdb_api_key") or os.environ.get("TMDB_API_KEY", "")
+	if not tmdb_key:
+		return jsonify({"error": "TMDb API Key not configured."}), 503
+
+	tmdb = TmdbClient(api_key=tmdb_key)
+
+	if not tv_id and title_arg:
+		search_res = tmdb.search_tv(title_arg, year_val)
+		if search_res and search_res.get("id"):
+			tv_id = search_res["id"]
+
+	if not tv_id:
+		return jsonify({"error": "Missing valid 'tv_id' or 'title' parameter."}), 400
+
+	details = tmdb.get_tv_details(tv_id)
+	if not details:
+		return jsonify({"error": f"Failed to retrieve TV show details for ID {tv_id}."}), 404
+
+	library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
+	show_title = details.get("name") or title_arg
+	show_year = details.get("year") or year_val
+	show_dir = find_tv_show_dir(library_root, tv_id, show_title, show_year)
+
+	seasons = details.get("seasons", [])
+	for s in seasons:
+		s_num = s.get("season_number", 1)
+		total_eps = s.get("episode_count", 0)
+		if show_dir:
+			disk_eps = scan_season_episodes_on_disk(show_dir, s_num)
+			eps_on_disk = len(disk_eps)
+		else:
+			eps_on_disk = 0
+
+		s["episodes_on_disk"] = eps_on_disk
+		missing_count = max(0, total_eps - eps_on_disk)
+		s["missing_count"] = missing_count
+
+		if eps_on_disk == 0:
+			s["status"] = "missing"
+		elif total_eps > 0 and eps_on_disk >= total_eps:
+			s["status"] = "complete"
+		else:
+			s["status"] = "partial"
+
+	return jsonify({
+		"tv_id": tv_id,
+		"title": details.get("name"),
+		"year": details.get("year"),
+		"first_air_date": details.get("first_air_date"),
+		"overview": details.get("overview"),
+		"poster_url": details.get("poster_url"),
+		"backdrop_url": details.get("backdrop_url"),
+		"number_of_seasons": details.get("number_of_seasons"),
+		"number_of_episodes": details.get("number_of_episodes"),
+		"genres": details.get("genres", []),
+		"on_server": bool(show_dir),
+		"show_folder": os.path.basename(show_dir) if show_dir else None,
+		"seasons": seasons
+	})
+
+
+@api_bp.route('/tv/season', methods=['GET'])
+@login_required
+def tv_season():
+	"""
+	Returns detailed season episodes with individual on-server and missing statuses.
+	Query params:
+		tv_id: int (TMDb ID, required)
+		season: int (Season number, required)
+		title: str (Show title, optional)
+		year: int (Optional year)
+	"""
+	tv_id_arg = request.args.get('tv_id')
+	season_arg = request.args.get('season')
+	title_arg = (request.args.get('title') or '').strip()
+	year_arg = request.args.get('year')
+
+	if not tv_id_arg or not season_arg:
+		return jsonify({"error": "Missing required parameters 'tv_id' and 'season'."}), 400
+
+	try:
+		tv_id = int(tv_id_arg)
+		season = int(season_arg)
+	except (ValueError, TypeError):
+		return jsonify({"error": "Invalid 'tv_id' or 'season' parameter."}), 400
+
+	year_val: Optional[int] = None
+	if year_arg:
+		try:
+			year_val = int(year_arg)
+		except (ValueError, TypeError):
+			year_val = None
+
+	settings = get_server_settings()
+	tmdb_key = settings.get("tmdb_api_key") or os.environ.get("TMDB_API_KEY", "")
+	if not tmdb_key:
+		return jsonify({"error": "TMDb API Key not configured."}), 503
+
+	tmdb = TmdbClient(api_key=tmdb_key)
+	season_details = tmdb.get_season_details(tv_id, season)
+	if not season_details:
+		return jsonify({"error": f"Failed to retrieve season details for TV ID {tv_id} Season {season}."}), 404
+
+	library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
+	show_dir = find_tv_show_dir(library_root, tv_id, title_arg, year_val)
+	disk_eps = scan_season_episodes_on_disk(show_dir, season) if show_dir else {}
+
+	today_str = datetime.date.today().isoformat()
+	episodes = season_details.get("episodes", [])
+	for ep in episodes:
+		ep_num = ep.get("episode_number")
+		if ep_num is not None and ep_num in disk_eps:
+			ep["on_server"] = True
+			ep["file_name"] = disk_eps[ep_num]["filename"]
+			ep["file_size"] = disk_eps[ep_num]["size"]
+		else:
+			ep["on_server"] = False
+			ep["file_name"] = None
+			ep["file_size"] = None
+
+		air_date = ep.get("air_date") or ""
+		ep["has_aired"] = bool(air_date and air_date <= today_str)
+
+	total_episodes = len(episodes)
+	aired_episodes = sum(1 for ep in episodes if ep.get("has_aired"))
+	on_server_count = sum(1 for ep in episodes if ep.get("on_server"))
+	missing_count = sum(1 for ep in episodes if ep.get("has_aired") and not ep.get("on_server"))
+	is_complete = (on_server_count >= total_episodes) if total_episodes > 0 else False
+
+	return jsonify({
+		"tv_id": tv_id,
+		"season_number": season,
+		"name": season_details.get("name"),
+		"air_date": season_details.get("air_date"),
+		"overview": season_details.get("overview"),
+		"poster_url": season_details.get("poster_url"),
+		"total_episodes": total_episodes,
+		"aired_episodes": aired_episodes,
+		"on_server_count": on_server_count,
+		"missing_count": missing_count,
+		"is_complete": is_complete,
+		"on_server": bool(show_dir),
+		"episodes": episodes
+	})
+
+
 # DOWNLOAD ENDPOINT
 @api_bp.route('/download', methods=['POST'])
 @login_required

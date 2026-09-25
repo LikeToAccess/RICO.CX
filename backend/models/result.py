@@ -41,6 +41,7 @@ class TorrentResult:
 		self.season: Optional[int] = None
 		self.episode: Optional[int] = None
 		self.is_tv: bool = False
+		self.is_season_pack: bool = False
 		self.is_ai: bool = False
 		self.is_cam: bool = False
 		self.relevancy_score: float = 0.0
@@ -111,6 +112,15 @@ class TorrentResult:
 				self.is_tv = True
 				if tv_match_pos is None or series_kw.start() < tv_match_pos:
 					tv_match_pos = series_kw.start()
+
+		# Determine if TV release is a Season Pack or Complete Series
+		if self.is_tv:
+			if self.episode is None:
+				self.is_season_pack = True
+			elif bool(re.search(r'\b(?:complete[\s._-]+(?:series|season)|season[\s._-]+pack|series[\s._-]+pack)\b', title_lower)):
+				self.is_season_pack = True
+			elif bool(re.search(r'[eE]\d{1,2}[\s._-]*[\-–][\s._-]*[eE]?\d{1,2}\b', self.title)):
+				self.is_season_pack = True
 
 		# Detect Year
 		year_match = re.search(r'\b(19\d{2}|20\d{2})\b', self.title)
@@ -330,6 +340,7 @@ class TorrentResult:
 			"season": self.season,
 			"episode": self.episode,
 			"is_tv": self.is_tv,
+			"is_season_pack": self.is_season_pack,
 			"is_ai": self.is_ai,
 			"is_cam": self.is_cam,
 			"relevancy_score": self.relevancy_score
@@ -346,6 +357,7 @@ class AggregatedResult:
 		self.is_tv = is_tv
 		self.downloads: List[TorrentResult] = []
 		self.poster_url: Optional[str] = None
+		self.tmdb_id: Optional[int] = None
 
 	def add_result(self, result: TorrentResult) -> None:
 		self.downloads.append(result)
@@ -416,5 +428,6 @@ class AggregatedResult:
 			"audio": self.audio,
 			"size_range": self.total_size_range,
 			"poster_url": self.poster_url,
+			"tmdb_id": self.tmdb_id,
 			"downloads": [d.to_dict() for d in self.downloads]
 		}

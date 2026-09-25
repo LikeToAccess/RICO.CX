@@ -663,6 +663,14 @@ function setupPopularContentListeners() {
   const gridEl = document.getElementById("popular-grid");
   if (gridEl) {
     gridEl.addEventListener("click", (e) => {
+      const trackerBtn = e.target.closest(".btn-popular-tv-tracker");
+      if (trackerBtn) {
+        const tvId = trackerBtn.getAttribute("data-tv-id");
+        const title = trackerBtn.getAttribute("data-title");
+        const year = trackerBtn.getAttribute("data-year");
+        openTvTrackerModal({ tmdb_id: tvId, clean_title: title, year });
+        return;
+      }
       const actionBtn = e.target.closest(".btn-popular-action");
       const posterWrap = e.target.closest(".popular-poster-wrap");
       const targetEl = actionBtn || posterWrap;
@@ -787,6 +795,15 @@ function renderPopularGrid() {
                     data-is-tv="${item.is_tv ? '1' : '0'}">
               ${isSaved ? '✓ Saved • Search More' : 'Search Releases'}
             </button>
+            ${item.is_tv ? `
+              <button class="btn btn-secondary btn-popular-tv-tracker" 
+                      data-tv-id="${item.id}" 
+                      data-title="${escapeHtml(item.clean_title)}" 
+                      data-year="${item.year || ''}" 
+                      title="Inspect seasons and missing episodes">
+                Seasons
+              </button>
+            ` : ''}
           </div>
         </div>
       </div>
@@ -796,21 +813,286 @@ function renderPopularGrid() {
   gridEl.innerHTML = html;
 }
 
-function searchFromPopular(cleanTitle, year, isTv) {
-  navigate("dashboard");
+function executeMediaSearch(queryStr, category = "tv") {
+  closeTvTrackerModal();
+  if (state.currentTab !== "dashboard") {
+    navigate("dashboard");
+  }
   const searchInput = document.getElementById("search-input");
-  const queryStr = cleanTitle;
   if (searchInput) {
     searchInput.value = queryStr;
   }
   const categorySelect = document.getElementById("filter-category");
-  const cat = isTv ? "tv" : "movie";
   if (categorySelect) {
-    categorySelect.value = cat;
+    categorySelect.value = category;
   }
   saveRecentSearch();
   updateClearButtonVisibility();
-  searchTrackers(queryStr, cat);
+  searchTrackers(queryStr, category);
+}
+
+function searchFromPopular(cleanTitle, year, isTv) {
+  executeMediaSearch(cleanTitle, isTv ? "tv" : "movie");
+}
+
+// TV Show Tracker State & Cache
+const tvDetailsCache = new Map();
+const tvSeasonCache = new Map();
+
+async function getTvDetails(tvId, title, year) {
+  const cacheKey = tvId ? String(tvId) : `${title}:${year || ""}`.toLowerCase();
+  if (tvDetailsCache.has(cacheKey)) {
+    return tvDetailsCache.get(cacheKey);
+  }
+  const headers = {};
+  if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+  const params = new URLSearchParams();
+  if (tvId) params.set("tv_id", String(tvId));
+  if (title) params.set("title", title);
+  if (year) params.set("year", String(year));
+
+  try {
+    const resp = await fetch(`/api/tv/details?${params.toString()}`, { headers });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    tvDetailsCache.set(cacheKey, data);
+    if (data.tv_id) tvDetailsCache.set(String(data.tv_id), data);
+    return data;
+  } catch (e) {
+    console.error("Failed to fetch TV details:", e);
+    return null;
+  }
+}
+
+async function getTvSeasonDetails(tvId, season, title, year) {
+  const cacheKey = `${tvId}:${season}`;
+  if (tvSeasonCache.has(cacheKey)) {
+    return tvSeasonCache.get(cacheKey);
+  }
+  const headers = {};
+  if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+  const params = new URLSearchParams({
+    tv_id: String(tvId),
+    season: String(season)
+  });
+  if (title) params.set("title", title);
+  if (year) params.set("year", String(year));
+
+  try {
+    const resp = await fetch(`/api/tv/season?${params.toString()}`, { headers });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    tvSeasonCache.set(cacheKey, data);
+    return data;
+  } catch (e) {
+    console.error("Failed to fetch TV season details:", e);
+    return null;
+  }
+}
+
+async function toggleTvDrawer(index, item) {
+  const drawerEl = document.getElementById(`tv-drawer-${index}`);
+  const toggleBtn = document.getElementById(`btn-tv-tracker-${index}`);
+  if (!drawerEl) return;
+
+  if (drawerEl.style.display !== "none") {
+    drawerEl.style.display = "none";
+    if (toggleBtn) toggleBtn.classList.remove("active");
+    return;
+  }
+
+  drawerEl.style.display = "flex";
+  if (toggleBtn) toggleBtn.classList.add("active");
+
+  drawerEl.innerHTML = `
+    <div style="display: flex; align-items: center; justify-content: center; padding: 1.5rem; color: var(--text-secondary); gap: 0.5rem;">
+      <span class="spinner"></span> Inspecting seasons and local library...
+    </div>
+  `;
+
+  const showData = await getTvDetails(item.tmdb_id, item.clean_title, item.year);
+  if (!showData || !showData.seasons || showData.seasons.length === 0) {
+    drawerEl.innerHTML = '<div class="empty-state" style="padding: 1rem;">No season details available.</div>';
+    return;
+  }
+
+  const defaultSeason = showData.seasons[0]?.season_number || 1;
+  renderTvTrackerContent(drawerEl, showData, defaultSeason, `card-${index}`);
+}
+
+function openTvTrackerModal(item) {
+  let modalEl = document.getElementById("tv-tracker-modal");
+  if (!modalEl) {
+    modalEl = document.createElement("div");
+    modalEl.id = "tv-tracker-modal";
+    modalEl.className = "tv-modal-overlay";
+    document.body.appendChild(modalEl);
+  }
+  modalEl.style.display = "flex";
+  const displayTitle = item.clean_title || item.title || "TV Show";
+  modalEl.innerHTML = `
+    <div class="tv-modal-content">
+      <div class="tv-modal-header">
+        <div>
+          <div class="tv-modal-title">${escapeHtml(displayTitle)} ${item.year ? `(${escapeHtml(item.year)})` : ''}</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px;">Season & Episode Tracker</div>
+        </div>
+        <button class="tv-modal-close" id="btn-close-tv-modal" aria-label="Close">&times;</button>
+      </div>
+      <div class="tv-modal-body" id="tv-modal-body">
+        <div style="display: flex; align-items: center; justify-content: center; padding: 2.5rem; color: var(--text-secondary); gap: 0.5rem;">
+          <span class="spinner"></span> Inspecting seasons and local library...
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("btn-close-tv-modal").onclick = closeTvTrackerModal;
+  modalEl.onclick = (e) => {
+    if (e.target === modalEl) closeTvTrackerModal();
+  };
+
+  const bodyEl = document.getElementById("tv-modal-body");
+  getTvDetails(item.tmdb_id || item.id, displayTitle, item.year).then(showData => {
+    if (!showData || !showData.seasons || showData.seasons.length === 0) {
+      bodyEl.innerHTML = '<div class="empty-state" style="padding: 1.5rem;">No season details found for this TV show.</div>';
+      return;
+    }
+    const defaultSeason = showData.seasons[0]?.season_number || 1;
+    renderTvTrackerContent(bodyEl, showData, defaultSeason, "modal-tv");
+  }).catch(err => {
+    console.error("TV Tracker modal error:", err);
+    bodyEl.innerHTML = '<div class="empty-state" style="padding: 1.5rem;">Failed to load TV details.</div>';
+  });
+}
+
+function closeTvTrackerModal() {
+  const modalEl = document.getElementById("tv-tracker-modal");
+  if (modalEl) modalEl.style.display = "none";
+}
+
+function renderTvTrackerContent(containerEl, showData, defaultSeasonNum, trackerIdPrefix) {
+  containerEl.innerHTML = "";
+
+  const tabsContainer = document.createElement("div");
+  tabsContainer.className = "tv-season-tabs";
+
+  showData.seasons.forEach(s => {
+    const tabBtn = document.createElement("button");
+    const isActive = s.season_number === defaultSeasonNum;
+    tabBtn.className = `tv-season-tab ${isActive ? 'active' : ''}`;
+    tabBtn.id = `${trackerIdPrefix}-tab-${s.season_number}`;
+
+    const dotClass = s.status === "complete" ? "complete" : (s.status === "partial" ? "partial" : "missing");
+    const statLabel = s.status === "complete" ? "✓" : `${s.episodes_on_disk}/${s.episode_count}`;
+
+    tabBtn.innerHTML = `
+      <span class="tab-status-dot ${dotClass}"></span>
+      Season ${s.season_number} (${statLabel})
+    `;
+
+    tabBtn.onclick = () => {
+      containerEl.querySelectorAll(".tv-season-tab").forEach(t => t.classList.remove("active"));
+      tabBtn.classList.add("active");
+      loadSeasonView(s.season_number);
+    };
+
+    tabsContainer.appendChild(tabBtn);
+  });
+
+  const contentContainer = document.createElement("div");
+  contentContainer.className = "tv-season-content";
+  contentContainer.id = `${trackerIdPrefix}-content`;
+
+  containerEl.appendChild(tabsContainer);
+  containerEl.appendChild(contentContainer);
+
+  const loadSeasonView = async (seasonNum) => {
+    contentContainer.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center; padding: 1.5rem; color: var(--text-secondary); gap: 0.5rem;">
+        <span class="spinner"></span> Loading Season ${seasonNum} episodes...
+      </div>
+    `;
+
+    const seasonData = await getTvSeasonDetails(showData.tv_id, seasonNum, showData.title, showData.year);
+    if (!seasonData) {
+      contentContainer.innerHTML = '<div class="empty-state" style="padding: 1rem;">Failed to load season episodes.</div>';
+      return;
+    }
+
+    const sStr = String(seasonNum).padStart(2, '0');
+    let statusBadgeHtml = "";
+    if (seasonData.is_complete) {
+      statusBadgeHtml = `<span class="badge-status badge-status-complete">✓ Season Complete (${seasonData.on_server_count}/${seasonData.total_episodes})</span>`;
+    } else if (seasonData.missing_count > 0) {
+      statusBadgeHtml = `<span class="badge-status badge-status-missing">⚠️ ${seasonData.missing_count} Missing (${seasonData.on_server_count}/${seasonData.total_episodes} on server)</span>`;
+    } else {
+      statusBadgeHtml = `<span class="badge-status badge-status-not-downloaded">0/${seasonData.total_episodes} on Server</span>`;
+    }
+
+    let episodesHtml = "";
+    (seasonData.episodes || []).forEach(ep => {
+      const eStr = String(ep.episode_number).padStart(2, '0');
+      const epCode = `S${sStr}E${eStr}`;
+      const searchTarget = `${showData.title} ${epCode}`;
+
+      let epStatusBadge = "";
+      let epActionBtn = "";
+
+      if (ep.on_server) {
+        const sizeTooltip = ep.file_size ? formatBytes(ep.file_size) : "";
+        const titleTooltip = ep.file_name ? `${escapeHtml(ep.file_name)} (${sizeTooltip})` : "";
+        epStatusBadge = `<span class="badge-status badge-status-complete" title="${titleTooltip}">✓ On Server</span>`;
+        epActionBtn = `<button class="btn btn-secondary btn-sm btn-ep-search" data-query="${escapeHtml(searchTarget)}">Search</button>`;
+      } else if (ep.has_aired) {
+        epStatusBadge = `<span class="badge-status badge-status-missing">⚠️ Missing</span>`;
+        epActionBtn = `<button class="btn btn-primary btn-sm btn-ep-grab" data-query="${escapeHtml(searchTarget)}">Get E${eStr}</button>`;
+      } else {
+        const dateLabel = ep.air_date || "TBA";
+        epStatusBadge = `<span class="badge-status badge-status-not-downloaded">Airs ${escapeHtml(dateLabel)}</span>`;
+        epActionBtn = `<button class="btn btn-secondary btn-sm" disabled style="opacity: 0.4;">Upcoming</button>`;
+      }
+
+      episodesHtml += `
+        <div class="tv-episode-row ${ep.on_server ? 'on-server' : (ep.has_aired ? 'missing' : '')}">
+          <div class="tv-ep-info">
+            <span class="tv-ep-code">${epCode}</span>
+            <span class="tv-ep-title" title="${escapeHtml(ep.name)}">${escapeHtml(ep.name)}</span>
+            <span class="tv-ep-date">${escapeHtml(ep.air_date || '')}</span>
+          </div>
+          <div class="tv-ep-actions">
+            ${epStatusBadge}
+            ${epActionBtn}
+          </div>
+        </div>
+      `;
+    });
+
+    contentContainer.innerHTML = `
+      <div class="tv-season-header">
+        <div class="tv-season-header-info">
+          <span class="tv-season-title">Season ${seasonNum} • ${seasonData.total_episodes} Episodes</span>
+          ${statusBadgeHtml}
+        </div>
+        <button class="btn btn-primary btn-season-pack-grab" data-query="${escapeHtml(showData.title)} S${sStr}">
+          ⚡ Grab Season ${seasonNum} Pack
+        </button>
+      </div>
+      <div class="tv-episodes-list">
+        ${episodesHtml || '<div class="empty-state" style="padding: 1rem;">No episodes listed.</div>'}
+      </div>
+    `;
+
+    // Wire action triggers
+    contentContainer.querySelectorAll(".btn-season-pack-grab, .btn-ep-grab, .btn-ep-search").forEach(btn => {
+      btn.onclick = () => {
+        const q = btn.getAttribute("data-query");
+        if (q) executeMediaSearch(q, "tv");
+      };
+    });
+  };
+
+  loadSeasonView(defaultSeasonNum);
 }
 
 // Client Side Filter & Sort logic
@@ -1160,11 +1442,18 @@ function renderSearchResults() {
       const marker = isSaved ? " • [ON SERVER]" : "";
       const isTopRecommended = dlIdx === 0 && (dl.relevancy_score ?? 0) > 0;
       const recMarker = isTopRecommended ? " • Recommended" : "";
+      let typeMarker = "";
+      if (dl.is_season_pack) {
+        const sStr = dl.season ? `S${String(dl.season).padStart(2, '0')}` : "FULL";
+        typeMarker = ` • [SEASON PACK: ${sStr}]`;
+      } else if (dl.is_tv && dl.season && dl.episode) {
+        typeMarker = ` • [EPISODE: S${String(dl.season).padStart(2, '0')}E${String(dl.episode).padStart(2, '0')}]`;
+      }
       const aiMarker = dl.is_ai ? " • [AI]" : "";
       const camMarker = dl.is_cam ? " • [CAM/TS]" : "";
       optionsHtml += `
         <option value="${dlIdx}">
-          [${displaySize} | Seeds: ${escapeHtml(dl.seeders)}]${recMarker}${marker}${aiMarker}${camMarker} - ${escapeHtml(dl.title)}
+          [${displaySize} | Seeds: ${escapeHtml(dl.seeders)}]${recMarker}${marker}${typeMarker}${aiMarker}${camMarker} - ${escapeHtml(dl.title)}
         </option>
       `;
     });
@@ -1216,11 +1505,27 @@ function renderSearchResults() {
           ${optionsHtml}
         </select>
         <button class="btn btn-primary" id="btn-dl-${index}">DOWNLOAD</button>
+        ${isTV ? `
+          <button class="btn btn-secondary btn-tv-tracker" id="btn-tv-tracker-${index}" title="Check seasons, library completion, and missing episodes">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 3px;"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+            Seasons & Episodes
+          </button>
+        ` : ''}
       </div>
+      ${isTV ? `<div class="tv-season-drawer" id="tv-drawer-${index}" style="display: none;"></div>` : ''}
     `;
 
     container.appendChild(cardEl);
     
+    if (isTV) {
+      const trackerBtn = cardEl.querySelector(`#btn-tv-tracker-${index}`);
+      if (trackerBtn) {
+        trackerBtn.addEventListener("click", () => {
+          toggleTvDrawer(index, item);
+        });
+      }
+    }
+
     const selectEl = cardEl.querySelector(`#select-dl-${index}`);
     const tagsContainer = cardEl.querySelector(`#card-tags-${index}`);
     const downloadBtn = cardEl.querySelector(`#btn-dl-${index}`);
@@ -1252,6 +1557,13 @@ function renderSearchResults() {
       }
       if (dlOption === downloads[0] && (dlOption.relevancy_score ?? 0) > 0) {
         tagsContainer.innerHTML += `<span class="tag-badge tag-badge-recommended">★ Recommended</span>`;
+      }
+      
+      if (dlOption.is_season_pack) {
+        const sStr = dlOption.season ? `S${String(dlOption.season).padStart(2, '0')}` : "FULL";
+        tagsContainer.innerHTML += `<span class="tag-badge tag-badge-season-pack">Season Pack (${sStr})</span>`;
+      } else if (dlOption.is_tv && dlOption.season && dlOption.episode) {
+        tagsContainer.innerHTML += `<span class="tag-badge tag-badge-episode">S${String(dlOption.season).padStart(2, '0')}E${String(dlOption.episode).padStart(2, '0')}</span>`;
       }
       
       tagsContainer.innerHTML += `<span class="tag-badge" style="border-style: solid; opacity: 0.6;">${escapeHtml(dlOption.indexer)}</span>`;
