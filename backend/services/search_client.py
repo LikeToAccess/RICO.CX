@@ -50,8 +50,12 @@ class SearchClient:
 			"X-Api-Key": self.api_key,
 			"Accept": "application/json"
 		}
+		# Lowercase the query to work around a 1337x indexer quirk where
+		# Title Case + uppercase SxxExx notation (e.g. "South Park S19E07")
+		# returns 0 results while the lowercase equivalent returns correct results.
+		# Result titles come back in their original casing regardless.
 		params: Dict[str, Union[str, List[str]]] = {
-			"query": query
+			"query": query.lower()
 		}
 
 		if category == "movie":
