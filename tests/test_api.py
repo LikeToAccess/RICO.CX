@@ -155,6 +155,58 @@ class TestAPI(unittest.TestCase):
 		self.assertEqual(card['downloads'][0]['season'], 1)
 		self.assertEqual(card['downloads'][0]['size'], 13544724221)
 
+	@patch('requests.post')
+	@patch('requests.get')
+	def test_search_magnet_auto_download(self, mock_get, mock_post):
+		self.db.execute("INSERT OR REPLACE INTO server_settings (key, value) VALUES (?, ?)", ("torbox_api_key", "dummy_torbox_key"))
+
+		mock_get_resp = MagicMock()
+		mock_get_resp.status_code = 200
+		mock_get_resp.json.return_value = {
+			"success": True,
+			"data": {
+				"ed0c184478144062828b211f6d3f3f504386b72d": {
+					"name": "Avatar 2009 1080p",
+					"size": 4000000000,
+					"hash": "ed0c184478144062828b211f6d3f3f504386b72d"
+				}
+			}
+		}
+		mock_get.return_value = mock_get_resp
+
+		mock_post_resp = MagicMock()
+		mock_post_resp.status_code = 200
+		mock_post_resp.json.return_value = {
+			"success": True,
+			"data": {
+				"torrent_id": 998877,
+				"hash": "ed0c184478144062828b211f6d3f3f504386b72d"
+			}
+		}
+		mock_post.return_value = mock_post_resp
+
+		magnet = "magnet:?xt=urn:btih:ed0c184478144062828b211f6d3f3f504386b72d&dn=Avatar+2009"
+		import urllib.parse
+		response = self.client.get(f'/api/search?q={urllib.parse.quote(magnet)}')
+		data = json.loads(response.data)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(data['type'], 'search_results')
+		self.assertTrue(data.get('auto_downloaded'))
+
+		# Verify download row was created in database
+		dl_row = self.db.query("SELECT * FROM downloads WHERE magnet = ?", (magnet,), one=True)
+		self.assertIsNotNone(dl_row)
+		self.assertEqual(dl_row['status'], 'queued')
+		self.assertEqual(str(dl_row['torbox_id']), '998877')
+
+		# Verify card in search results reflects that download is in database
+		card = data['data'][0]
+		self.assertTrue(card['in_database'])
+		dl = card['downloads'][0]
+		self.assertTrue(dl['in_database'])
+		self.assertEqual(dl['db_status'], 'queued')
+
 	def test_user_settings(self):
 		# Change user to Admin to allow settings access
 		self.user.group_id = 1

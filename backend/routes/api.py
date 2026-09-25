@@ -8,7 +8,7 @@ import threading
 import time
 from collections import deque
 from functools import wraps
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import requests
 from flask import Blueprint, request, jsonify, g, redirect
 from ..models.user import User
@@ -1058,6 +1058,183 @@ def health():
 	}), 200
 
 
+def start_magnet_download(
+	user: User,
+	magnet: str,
+	title: str = "Unknown Torrent",
+	filename: str = "Unknown",
+	category: str = "movie",
+	year: Optional[Union[str, int]] = None,
+	season: Optional[Union[str, int]] = None,
+	episode: Optional[Union[str, int]] = None,
+	size: int = 0,
+	force_overwrite: bool = False
+) -> Dict[str, Any]:
+	"""
+	Initiates the download for a magnet link on the server side:
+	- Checks for duplicate active or completed downloads
+	- Submits the magnet to Torbox
+	- Records the download entry in SQLite
+	- Spawns background worker thread to monitor & stream files to disk
+	- Emits WebSocket notification
+	"""
+	if not magnet or not isinstance(magnet, str):
+		return {"error": "Missing or invalid magnet link", "status_code": 400}
+
+	try:
+		size = int(size)
+	except (ValueError, TypeError):
+		size = 0
+
+	settings = get_server_settings()
+	library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
+	library_root = os.path.abspath(library_root)
+	file_sizes = get_library_file_sizes(library_root)
+
+	db = Database()
+
+	# Check if already actively downloading or queued
+	existing_active = db.query(
+		"SELECT id, torbox_id, status FROM downloads WHERE magnet = ? AND status NOT IN ('failed', 'cancelled')",
+		(magnet,),
+		one=True
+	)
+	if existing_active and not force_overwrite:
+		logger.info(
+			"Magnet already active in downloads (ID %s, status %s). Skipping duplicate queue.",
+			existing_active["id"], existing_active["status"]
+		)
+		return {
+			"success": True,
+			"torbox_id": existing_active["torbox_id"],
+			"download_id": existing_active["id"],
+			"status": existing_active["status"],
+			"already_active": True
+		}
+
+	# Check if already completed in library
+	existing_completed = db.query(
+		"SELECT id FROM downloads WHERE (magnet = ? OR (size > 0 AND size = ?)) AND status = 'completed'",
+		(magnet, size),
+		one=True
+	)
+	if not force_overwrite and (existing_completed or (size > 0 and size in file_sizes)):
+		logger.info("Preventive skip: File with size %d / magnet already completed in library. Marking completed.", size)
+		skipped_id = f"skipped_{int(time.time())}"
+		db_download_id = db.execute(
+			"INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			(user.id, skipped_id, title, filename, magnet, 'completed', category, size, 100)
+		)
+		socketio.emit('download_progress', {
+			'id': skipped_id,
+			'title': title,
+			'filename': filename,
+			'magnet': magnet,
+			'status': 'completed',
+			'progress': 100,
+			'speed': 0,
+			'size': size,
+			'user_id': user.id
+		})
+		socketio.emit('download_added', {
+			"torbox_id": skipped_id,
+			"title": title,
+			"filename": filename,
+			"magnet": magnet,
+			"status": "completed",
+			"progress": 100,
+			"speed": 0,
+			"size": size,
+			"category": category,
+			"created_at": time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
+			"user_id": user.id,
+			"username": user.username,
+			"full_name": user.full_name or user.username
+		})
+		return {
+			"success": True,
+			"torbox_id": skipped_id,
+			"download_id": db_download_id,
+			"status": "completed"
+		}
+
+	torbox_key = settings.get("torbox_api_key") or os.environ.get("TORBOX_API_KEY", "")
+	if not torbox_key:
+		return {"error": "Torbox API Key not configured. Please save it in settings first.", "status_code": 400}
+
+	torbox = TorboxClient(api_key=torbox_key)
+	res = torbox.add_magnet(magnet)
+
+	if res and res.get('success'):
+		torrent_id = None
+		res_data = res.get('data')
+		if isinstance(res_data, dict):
+			torrent_id = res_data.get('torrent_id') or res_data.get('id') or res_data.get('queued_id')
+		elif isinstance(res_data, (int, float, str)):
+			torrent_id = res_data
+
+		if not torrent_id:
+			torrent_id = res.get('torrent_id') or res.get('id')
+
+		if not torrent_id:
+			logger.error("Torbox responded successfully but no torrent_id found in response: %s", res)
+			return {"error": "Failed to retrieve torrent ID from Torbox response.", "status_code": 500}
+
+		logger.info("Torrent added to Torbox. Torrent ID: %s", torrent_id)
+
+		db_download_id = db.execute(
+			"INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			(user.id, str(torrent_id), title, filename, magnet, 'queued', category, size)
+		)
+
+		metadata = {
+			'title': title,
+			'filename': filename,
+			'magnet': magnet,
+			'category': category,
+			'year': year,
+			'season': season,
+			'episode': episode
+		}
+		start_bg_task(
+			monitor_and_download_task,
+			user.id,
+			torrent_id,
+			metadata,
+			db_download_id
+		)
+
+		socketio.emit('download_added', {
+			"torbox_id": str(torrent_id),
+			"title": title,
+			"filename": filename,
+			"magnet": magnet,
+			"status": "queued",
+			"progress": 0,
+			"speed": 0,
+			"size": size,
+			"category": category,
+			"created_at": time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
+			"user_id": user.id,
+			"username": user.username,
+			"full_name": user.full_name or user.username
+		})
+
+		return {
+			"success": True,
+			"torbox_id": str(torrent_id),
+			"download_id": db_download_id,
+			"status": "queued"
+		}
+
+	error_msg = "Failed to add torrent to Torbox"
+	if res and isinstance(res, dict):
+		detail = res.get("detail") or res.get("error")
+		if detail:
+			error_msg = str(detail)
+	return {"error": error_msg, "status_code": 400}
+
+
 # SEARCH ENDPOINT
 @api_bp.route('/search', methods=['GET'])
 @login_required
@@ -1134,6 +1311,24 @@ def search():
 		if tmdb_key:
 			tmdb.resolve_posters_batch([agg])
 
+		# Automatically start downloading on the server side ("Set and Forget")
+		category_val = category if category in ("movie", "tv") else ("tv" if agg.is_tv else "movie")
+		auto_dl_result = start_magnet_download(
+			user=g.user,
+			magnet=magnet_url,
+			title=agg.clean_title or display_name,
+			filename=display_name,
+			category=category_val,
+			year=agg.year,
+			season=None,
+			episode=None,
+			size=size,
+			force_overwrite=False
+		)
+		auto_downloaded = auto_dl_result.get("success", False)
+		if auto_downloaded:
+			logger.info("Auto-download initiated for magnet: '%s' (torbox_id: %s)", display_name, auto_dl_result.get("torbox_id"))
+
 		library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
 		file_sizes = get_library_file_sizes(library_root)
 
@@ -1143,7 +1338,8 @@ def search():
 
 		return jsonify({
 			"type": "search_results",
-			"data": cards
+			"data": cards,
+			"auto_downloaded": auto_downloaded
 		})
 
 	t_search_start = time.time()
@@ -1273,147 +1469,27 @@ def download():
 	season = data.get('season')
 	episode = data.get('episode')
 	size = data.get('size', 0)
-
-	if not magnet or not isinstance(magnet, str):
-		return jsonify({"error": "Missing or invalid magnet link"}), 400
-
-	try:
-		size = int(size)
-	except (ValueError, TypeError):
-		size = 0
-
-	settings = get_server_settings()
-	library_root = settings.get("library_path") or os.environ.get("ROOT_LIBRARY_LOCATION", "./library")
-	library_root = os.path.abspath(library_root)
-	file_sizes = get_library_file_sizes(library_root)
-
 	force_overwrite = bool(data.get('overwrite', False))
-	db = Database()
-	existing_completed = db.query(
-		"SELECT id FROM downloads WHERE (magnet = ? OR (size > 0 AND size = ?)) AND status = 'completed'",
-		(magnet, size),
-		one=True
+
+	result = start_magnet_download(
+		user=g.user,
+		magnet=magnet,
+		title=title,
+		filename=filename,
+		category=category,
+		year=year,
+		season=season,
+		episode=episode,
+		size=size,
+		force_overwrite=force_overwrite
 	)
-	if not force_overwrite and (existing_completed or (size > 0 and size in file_sizes)):
-		logger.info(f"Preventive skip: File with size {size} / magnet already completed in library. Marking completed.")
-		skipped_id = f"skipped_{int(time.time())}"
-		db_download_id = db.execute(
-			"INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			(g.user.id, skipped_id, title, filename, magnet, 'completed', category, size, 100)
-		)
-		socketio.emit('download_progress', {
-			'id': skipped_id,
-			'title': title,
-			'filename': filename,
-			'magnet': magnet,
-			'status': 'completed',
-			'progress': 100,
-			'speed': 0,
-			'size': size,
-			'user_id': g.user.id
-		})
-		socketio.emit('download_added', {
-			"torbox_id": skipped_id,
-			"title": title,
-			"filename": filename,
-			"magnet": magnet,
-			"status": "completed",
-			"progress": 100,
-			"speed": 0,
-			"size": size,
-			"category": category,
-			"created_at": time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
-			"user_id": g.user.id,
-			"username": g.user.username,
-			"full_name": g.user.full_name or g.user.username
-		})
-		return jsonify({
-			"success": True,
-			"torbox_id": skipped_id,
-			"download_id": db_download_id,
-			"status": "completed"
-		})
 
-	torbox_key = settings.get("torbox_api_key") or os.environ.get("TORBOX_API_KEY", "")
-	if not torbox_key:
-		return jsonify({"error": "Torbox API Key not configured. Please save it in settings first."}), 400
+	if "error" in result:
+		status_code = result.get("status_code", 400)
+		return jsonify({"error": result["error"]}), status_code
 
-	torbox = TorboxClient(api_key=torbox_key)
-	res = torbox.add_magnet(magnet)
-
-	if res and res.get('success'):
-		torrent_id = None
-		res_data = res.get('data')
-		if isinstance(res_data, dict):
-			torrent_id = res_data.get('torrent_id') or res_data.get('id') or res_data.get('queued_id')
-		elif isinstance(res_data, (int, float, str)):
-			torrent_id = res_data
-
-		if not torrent_id:
-			torrent_id = res.get('torrent_id') or res.get('id')
-
-		if not torrent_id:
-			logger.error(f"Torbox responded successfully but no torrent_id or queued_id could be found in response: {res}")
-			return jsonify({"error": "Failed to retrieve torrent ID from Torbox response."}), 500
-
-		logger.info(f"Torrent added to Torbox. Torrent ID: {torrent_id}")
-
-		# Save records in sqlite
-		db = Database()
-		db_download_id = db.execute(
-			"INSERT INTO downloads (user_id, torbox_id, title, filename, magnet, status, category, size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-			(g.user.id, str(torrent_id), title, filename, magnet, 'queued', category, 0)
-		)
-
-		# Start background task to monitor
-		metadata = {
-			'title': title,
-			'filename': filename,
-			'magnet': magnet,
-			'category': category,
-			'year': year,
-			'season': season,
-			'episode': episode
-		}
-		start_bg_task(
-			monitor_and_download_task,
-			g.user.id,
-			torrent_id,
-			metadata,
-			db_download_id
-		)
-
-		socketio.emit('download_added', {
-			"torbox_id": str(torrent_id),
-			"title": title,
-			"filename": filename,
-			"magnet": magnet,
-			"status": "queued",
-			"progress": 0,
-			"speed": 0,
-			"size": 0,
-			"category": category,
-			"created_at": time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime()),
-			"user_id": g.user.id,
-			"username": g.user.username,
-			"full_name": g.user.full_name or g.user.username
-		})
-
-		logger.info("[PERF] /api/download queued '%s' in %.3fms", title, (time.time() - t_dl_start) * 1000)
-		return jsonify({
-			"success": True,
-			"torbox_id": torrent_id,
-			"download_id": db_download_id,
-			"status": "queued"
-		})
-	else:
-		# Check if we got a structured error response from Torbox
-		error_msg = "Failed to add torrent to Torbox"
-		if res and isinstance(res, dict):
-			detail = res.get("detail") or res.get("error")
-			if detail:
-				error_msg = detail
-		return jsonify({"error": error_msg}), 400
+	logger.info("[PERF] /api/download completed '%s' in %.3fms", title, (time.time() - t_dl_start) * 1000)
+	return jsonify(result), 200
 
 
 # DOWNLOADS LIST

@@ -308,10 +308,21 @@ async function searchTrackers(query, category) {
 
   const container = document.getElementById("results-list");
   const loaderEl = document.getElementById("search-loading");
-  
-  if (loaderEl) loaderEl.style.display = "flex";
+
+  const trimmed = (query || "").trim();
+  const isMagnet = trimmed.toLowerCase().startsWith("magnet:") ||
+                   /^[0-9a-fA-F]{40}$/.test(trimmed) ||
+                   /^[2-7a-zA-Z]{32}$/.test(trimmed);
+
+  if (loaderEl) {
+    const textSpan = loaderEl.querySelector("span:last-child");
+    if (textSpan) {
+      textSpan.textContent = isMagnet ? "ADDING MAGNET & STARTING DOWNLOAD..." : "SCRAPING INDEXERS...";
+    }
+    loaderEl.style.display = "flex";
+  }
   container.innerHTML = "";
-  
+
   try {
     const headers = {};
     if (state.token) {
@@ -321,6 +332,32 @@ async function searchTrackers(query, category) {
     const resData = await resp.json();
     if (resp.ok) {
       state.searchResults = resData.data;
+
+      // If auto-downloaded, ensure downloads state is immediately synced
+      if (resData.auto_downloaded && resData.data && resData.data.length > 0) {
+        const firstDl = resData.data[0].downloads?.[0];
+        if (firstDl && firstDl.torbox_id) {
+          const already = state.downloads.some(d => String(d.torbox_id) === String(firstDl.torbox_id));
+          if (!already) {
+            state.downloads.unshift({
+              torbox_id: firstDl.torbox_id,
+              title: resData.data[0].clean_title || firstDl.title,
+              filename: firstDl.title,
+              magnet: firstDl.download_url,
+              status: firstDl.db_status || "queued",
+              progress: 0,
+              speed: 0,
+              size: firstDl.size || 0,
+              category: resData.data[0].is_tv ? "tv" : "movie",
+              user_id: state.user?.id
+            });
+            renderActiveDownloads();
+            updateSidebarBadge();
+          }
+        }
+        fetchDownloads();
+      }
+
       saveRecentSearch();
       renderSearchResults();
       updateClearButtonVisibility();
@@ -331,7 +368,11 @@ async function searchTrackers(query, category) {
     console.error("Search API failure:", err);
     container.innerHTML = `<div class="alert-box alert-error">Failed to query search indexers.</div>`;
   } finally {
-    if (loaderEl) loaderEl.style.display = "none";
+    if (loaderEl) {
+      loaderEl.style.display = "none";
+      const textSpan = loaderEl.querySelector("span:last-child");
+      if (textSpan) textSpan.textContent = "SCRAPING INDEXERS...";
+    }
   }
 }
 
