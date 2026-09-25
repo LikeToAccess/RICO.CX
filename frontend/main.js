@@ -579,8 +579,91 @@ function updateClearButtonVisibility() {
   }
 }
 
-// Real-time button sync for active search results
+function areMagnetsEqual(m1, m2) {
+  if (!m1 || !m2) return false;
+  if (m1 === m2) return true;
+  const extractHash = (m) => {
+    const match = String(m).match(/urn:btih:([a-zA-Z0-9]+)/i);
+    return match ? match[1].toLowerCase() : String(m).trim().toLowerCase();
+  };
+  return extractHash(m1) === extractHash(m2);
+}
+
+function syncSearchResultsWithDownloads() {
+  if (!state.searchResults || state.searchResults.length === 0) return;
+  if (!state.downloads || state.downloads.length === 0) return;
+
+  const completedDownloads = state.downloads.filter(d => {
+    const s = (d.status || "").toLowerCase();
+    return s.includes("completed") || s.includes("downloaded") || Number(d.progress) >= 100;
+  });
+
+  if (completedDownloads.length === 0) return;
+
+  const extractHash = (m) => {
+    if (!m) return "";
+    const match = String(m).match(/urn:btih:([a-zA-Z0-9]+)/i);
+    return match ? match[1].toLowerCase() : String(m).trim().toLowerCase();
+  };
+
+  let hasChanges = false;
+
+  state.searchResults.forEach(item => {
+    const cleanTitle = (item.clean_title || "").trim().toLowerCase();
+
+    // Check if any completed download matches this card's clean title
+    const titleMatch = completedDownloads.find(d => {
+      const dTitle = (d.title || "").trim().toLowerCase();
+      return dTitle === cleanTitle;
+    });
+
+    if (titleMatch && !item.in_database) {
+      item.in_database = true;
+      item.existing_download = {
+        title: titleMatch.title,
+        filename: titleMatch.filename,
+        size: titleMatch.size,
+        status: "completed"
+      };
+      hasChanges = true;
+    }
+
+    // Check each download release under this card
+    (item.downloads || []).forEach(dl => {
+      const dlHash = extractHash(dl.download_url);
+      const match = completedDownloads.find(d => {
+        if (d.magnet && dl.download_url && areMagnetsEqual(d.magnet, dl.download_url)) return true;
+        if (dlHash && d.magnet && extractHash(d.magnet) === dlHash) return true;
+        return false;
+      });
+
+      if (match) {
+        if (!dl.in_database || !dl.downloaded || dl.db_status !== "completed") {
+          dl.in_database = true;
+          dl.downloaded = true;
+          dl.db_status = "completed";
+          item.in_database = true;
+          item.existing_download = {
+            title: match.title,
+            filename: match.filename,
+            size: match.size,
+            status: "completed"
+          };
+          hasChanges = true;
+        }
+      }
+    });
+  });
+
+  if (hasChanges) {
+    saveRecentSearch();
+  }
+}
+
+// Real-time button and card state sync for active search results
 function updateSearchResultButtons() {
+  syncSearchResultsWithDownloads();
+
   const cards = document.querySelectorAll(".media-card");
   if (cards.length === 0) return;
   
@@ -594,15 +677,84 @@ function updateSearchResultButtons() {
     const item = filteredData[index];
     if (!item) return;
     
-    const downloads = item.downloads;
-    const dlIdx = parseInt(selectEl.value);
+    const downloads = item.downloads || [];
+    const dlIdx = parseInt(selectEl.value) || 0;
     const dlOption = downloads[dlIdx];
     if (!dlOption) return;
     
     const isSavedInDb = item.in_database || downloads.some(d => d.in_database || d.downloaded);
-    const activeDl = state.downloads.find(d => d.magnet === dlOption.download_url);
+    const activeDl = state.downloads.find(d => areMagnetsEqual(d.magnet, dlOption.download_url));
     const isActiveInProgress = activeDl && !activeDl.status.toLowerCase().includes("completed") && !activeDl.status.toLowerCase().includes("failed");
 
+    // 1. Update Card border / container class
+    cardEl.classList.toggle("in-database", isSavedInDb);
+
+    // 2. Update Title "ON SERVER" Badge
+    const titleLine = cardEl.querySelector(".media-title-line");
+    if (titleLine) {
+      let dbBadgeEl = titleLine.querySelector(".media-in-db-badge");
+      if (isSavedInDb) {
+        if (!dbBadgeEl) {
+          dbBadgeEl = document.createElement("span");
+          dbBadgeEl.className = "media-in-db-badge";
+          dbBadgeEl.title = "This media is already saved on the server database";
+          dbBadgeEl.innerHTML = `
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -1px; margin-right: 2px;"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+            ON SERVER
+          `;
+          titleLine.appendChild(dbBadgeEl);
+        }
+      } else if (dbBadgeEl) {
+        dbBadgeEl.remove();
+      }
+    }
+
+    // 3. Update Select Dropdown Options Marker
+    Array.from(selectEl.options).forEach((opt, idx) => {
+      const dl = downloads[idx];
+      if (!dl) return;
+      const isSaved = dl.in_database || dl.downloaded;
+      const hasMarker = opt.text.includes(" • [ON SERVER]");
+      if (isSaved && !hasMarker) {
+        const hyphenIdx = opt.text.indexOf(" - ");
+        if (hyphenIdx !== -1) {
+          opt.text = opt.text.slice(0, hyphenIdx) + " • [ON SERVER]" + opt.text.slice(hyphenIdx);
+        } else {
+          opt.text += " • [ON SERVER]";
+        }
+      } else if (!isSaved && hasMarker) {
+        opt.text = opt.text.replace(" • [ON SERVER]", "");
+      }
+    });
+
+    // 4. Update Tags Container for currently selected option
+    const tagsContainer = cardEl.querySelector(`#card-tags-${index}`);
+    if (tagsContainer) {
+      let dbTag = tagsContainer.querySelector(".tag-badge-in-db");
+      let altTag = tagsContainer.querySelector(".tag-badge-alt-version");
+      if (dlOption.in_database || dlOption.downloaded) {
+        if (altTag) altTag.remove();
+        if (!dbTag) {
+          dbTag = document.createElement("span");
+          dbTag.className = "tag-badge tag-badge-in-db";
+          dbTag.textContent = "✓ Saved on Server";
+          tagsContainer.appendChild(dbTag);
+        }
+      } else if (isSavedInDb) {
+        if (dbTag) dbTag.remove();
+        if (!altTag) {
+          altTag = document.createElement("span");
+          altTag.className = "tag-badge tag-badge-alt-version";
+          altTag.textContent = "Alternate Version (Will Overwrite)";
+          tagsContainer.appendChild(altTag);
+        }
+      } else {
+        if (dbTag) dbTag.remove();
+        if (altTag) altTag.remove();
+      }
+    }
+
+    // 5. Update Download Button
     if (isActiveInProgress) {
       const progress = activeDl.progress || 0;
       const status = activeDl.status;
@@ -648,6 +800,8 @@ function updateSearchResultButtons() {
 
 // Renders the (filtered) list of search results
 function renderSearchResults() {
+  syncSearchResultsWithDownloads();
+
   const container = document.getElementById("results-list");
   if (!container) return;
 
@@ -762,14 +916,15 @@ function renderSearchResults() {
       
       tagsContainer.innerHTML += `<span class="tag-badge" style="border-style: solid; opacity: 0.6;">${escapeHtml(dlOption.indexer)}</span>`;
       
+      const currentSavedInDb = item.in_database || downloads.some(d => d.in_database || d.downloaded);
       if (dlOption.in_database || dlOption.downloaded) {
         tagsContainer.innerHTML += `<span class="tag-badge tag-badge-in-db">✓ Saved on Server</span>`;
-      } else if (isSavedInDb) {
+      } else if (currentSavedInDb) {
         tagsContainer.innerHTML += `<span class="tag-badge tag-badge-alt-version">Alternate Version (Will Overwrite)</span>`;
       }
       
       // Update download button state
-      const activeDl = state.downloads.find(d => d.magnet === dlOption.download_url);
+      const activeDl = state.downloads.find(d => areMagnetsEqual(d.magnet, dlOption.download_url));
       const isActiveInProgress = activeDl && !activeDl.status.toLowerCase().includes("completed") && !activeDl.status.toLowerCase().includes("failed");
 
       if (isActiveInProgress) {
@@ -792,7 +947,7 @@ function renderSearchResults() {
         downloadBtn.removeAttribute("data-active-download");
         downloadBtn.removeAttribute("data-torrent-id");
         downloadBtn.removeAttribute("data-normal-text");
-      } else if (isSavedInDb) {
+      } else if (currentSavedInDb) {
         downloadBtn.disabled = false;
         downloadBtn.innerHTML = "DOWNLOAD & REPLACE";
         downloadBtn.className = "btn btn-primary";
